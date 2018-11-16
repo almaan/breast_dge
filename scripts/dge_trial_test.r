@@ -6,7 +6,7 @@ suppressPackageStartupMessages(library("docstring"))
 suppressPackageStartupMessages(library("optparse"))
 suppressPackageStartupMessages(library("futile.logger"))
 
-call("git describe --tags")
+system("git describe --tags")
 
 extract_names <- function(string){
   #' Extracts sample id and replicate provided
@@ -40,9 +40,21 @@ merge_matrices <- function(M1,M2, na_fill = 0.0){
 }
 
 
-prepare_counts <-function(main_pth,single_sample){
+prepare_counts <-function(main_pth,single_sample, lower_bound = 0){
+  #'Load and format the count-matrix of a .tsv file
+  #'Input file must have genes as columns and spots as rows
+  #'Will remove all spots with a total count less than lower_bound
+  #'If a specific gene-list is provided by the user, only these
+  #'genes will be read, else all union of genes found in all samples will
+  #'be read.
   #'
-  #'
+  #'Input : 
+  #'   - main_pth : directory where .tsv count matrix files are located
+  #'   - single_sample : file-name of count matrix. Format spots x genes
+  #'   - lower_bound : lower bound of total count of a spot. Default 0
+  #'   
+  #'Output : 
+  #'   - tcnt : count matrix dataframe with spots as rows, genes as columns 
   
   full_pth <- paste(main_pth,single_sample,sep = "/")
   sample_name <- extract_names(single_sample)
@@ -62,19 +74,40 @@ prepare_counts <-function(main_pth,single_sample){
     remove(header)
   } 
   
-  pasCts <- as.data.frame(read.csv(full_pth,
+  tcnt <- as.data.frame(read.csv(full_pth,
                                    sep = '\t',
                                    header = TRUE,
                                    colClasses = colclass,
                                    row.names = 1,
                                    ))
   
-  rownames(pasCts) <- sapply(rownames(pasCts), function(x) paste(sample_name,x, sep = '_'))
-  pasCts <- pasCts[rowSums(pasCts) > 0,]
-  return(pasCts)
+  rownames(tcnt) <- sapply(rownames(tcnt), function(x) paste(sample_name,x, sep = '_'))
+  
+  prior_n_spots <- dim(tcnt)[1]
+  tcnt <- tcnt[rowSums(tcnt) > lower_bound,]
+  post_n_spots <- dim(tcnt)[1]
+  
+  flog.info(paste(c("A total of", 
+                    prior_n_spots - post_n_spots,
+                    "/",
+                    prior_n_spots,
+                    "spots were removed",
+                    "due to low counts"),
+                  collapse = " ")
+            )
+  
+  return(tcnt)
 }
 
 prepare_coldata <- function(feature_file_dir,single_sample) {
+  #' Prepare coldata dataframe for DESeq2
+  #' 
+  #'  Input : 
+  #'    - feature_file_dir : directory of feature_file_dir specified for sample
+  #'    - single_sample : file-name of sample to be loaded
+  #'     
+  #'  Output : 
+  #'     - cdata : colData data-frame to be used in DESeq2
   
   sample_name <- extract_names(single_sample)
   flog.info(paste(c('Including', sample_name, "into feature matrix"), collapse = " "))
@@ -102,12 +135,20 @@ main <- function() {
   for (num in 1:length(count_file_names)) {
     if (num == 1) {
       
-      cnt <- prepare_counts(COUNT_DATA_DIR, count_file_names[num])
-      coldata <- prepare_coldata(FEATURE_FILE_DIR, count_file_names[num])
+      cnt <- prepare_counts(COUNT_DATA_DIR,
+                            count_file_names[num])
+      
+      coldata <- prepare_coldata(FEATURE_FILE_DIR,
+                                 count_file_names[num])
       
     } else {
-      cnt <- merge_matrices(cnt,prepare_counts(COUNT_DATA_DIR,count_file_names[num]))
-      coldata <- merge_matrices(coldata, prepare_coldata(FEATURE_FILE_DIR, count_file_names[num]))
+      cnt <- merge_matrices(cnt,
+                            prepare_counts(COUNT_DATA_DIR,
+                            count_file_names[num]))
+      
+      coldata <- merge_matrices(coldata, 
+                                prepare_coldata(FEATURE_FILE_DIR,
+                                count_file_names[num]))
     }
   } 
   
@@ -143,11 +184,10 @@ main <- function() {
   
   flog.info("Transfered size factors from scran to DESeq2")  
   
-  #ERROR : Identified Problem here
   
   dds <- DESeq(dds, 
-               # parallel = TRUE,
-               # BPPARAM = N_WORKERS,
+               parallel = TRUE,
+               BPPARAM = N_WORKERS,
                )
   
   summary(dds)
