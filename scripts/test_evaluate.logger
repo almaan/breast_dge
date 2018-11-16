@@ -1,0 +1,66 @@
+INFO [2018-11-16 02:46:56] Using the genes specified in file /home/alma/ST-2018/CNNp/DGE/data/test_data/PAM50.ENSG.dat
+INFO [2018-11-16 02:46:56] Including 23209_C1 into count matrix
+INFO [2018-11-16 02:46:59] Including 23209_C1 into feature matrix
+INFO [2018-11-16 02:46:59] Including 23209_D1 into count matrix
+INFO [2018-11-16 02:47:03] Including 23209_D1 into feature matrix
+INFO [2018-11-16 02:47:04] Size Factors Computed Using scran
+INFO [2018-11-16 02:47:04] DESeq2 Matrix generated
+INFO [2018-11-16 02:49:17] Using the genes specified in file /home/alma/ST-2018/CNNp/DGE/data/test_data/PAM50.ENSG.dat
+INFO [2018-11-16 02:49:18] Including 23209_C1 into count matrix
+INFO [2018-11-16 02:49:21] Including 23209_C1 into feature matrix
+INFO [2018-11-16 02:49:21] Including 23209_D1 into count matrix
+INFO [2018-11-16 02:49:24] Including 23209_D1 into feature matrix
+INFO [2018-11-16 02:49:26] Size Factors Computed Using scran
+INFO [2018-11-16 02:49:26] DESeq2 Matrix generated
+INFO [2018-11-16 02:51:42] Using the genes specified in file /home/alma/ST-2018/CNNp/DGE/data/test_data/PAM50.ENSG.dat
+INFO [2018-11-16 02:51:42] Including 23209_C1 into count matrix
+INFO [2018-11-16 02:51:45] Including 23209_C1 into feature matrix
+INFO [2018-11-16 02:51:45] Including 23209_D1 into count matrix
+INFO [2018-11-16 02:51:49] Including 23209_D1 into feature matrix
+INFO [2018-11-16 02:51:50] Size Factors Computed Using scran
+INFO [2018-11-16 02:51:51] DESeq2 Matrix generated
+INFO [2018-11-16 02:54:30] Using the genes specified in file /home/alma/ST-2018/CNNp/DGE/data/test_data/PAM50.ENSG.dat
+INFO [2018-11-16 02:54:30] Including 23209_C1 into count matrix
+INFO [2018-11-16 02:54:33] Including 23209_C1 into feature matrix
+INFO [2018-11-16 02:54:33] Including 23209_D1 into count matrix
+INFO [2018-11-16 02:54:37] Including 23209_D1 into feature matrix
+INFO [2018-11-16 02:54:38] Size Factors Computed Using scran
+INFO [2018-11-16 02:54:38] DESeq2 Matrix generated
+INFO [2018-11-16 02:54:38] Transfered size factors from scran to DESeq2
+INFO [2018-11-16 02:55:41] Using the genes specified in file /home/alma/ST-2018/CNNp/DGE/data/test_data/PAM50.ENSG.dat
+INFO [2018-11-16 02:55:41] Including 23209_C1 into count matrix
+INFO [2018-11-16 02:55:44] Including 23209_C1 into feature matrix
+INFO [2018-11-16 02:55:44] Including 23209_D1 into count matrix
+INFO [2018-11-16 02:55:48] Including 23209_D1 into feature matrix
+INFO [2018-11-16 02:55:49] Size Factors Computed Using scran
+INFO [2018-11-16 02:55:49] DESeq2 Matrix generated
+INFO [2018-11-16 02:57:38] Using the genes specified in file /home/alma/ST-2018/CNNp/DGE/data/test_data/PAM50.ENSG.dat
+INFO [2018-11-16 02:57:38] Including 23209_C1 into count matrix
+INFO [2018-11-16 02:57:41] Including 23209_C1 into feature matrix
+INFO [2018-11-16 02:57:41] Including 23209_D1 into count matrix
+INFO [2018-11-16 02:57:45] Including 23209_D1 into feature matrix
+INFO [2018-11-16 02:57:46] Size Factors Computed Using scran
+INFO [2018-11-16 02:57:46] DESeq2 Matrix generated
+INFO [2018-11-16 02:58:33] Using the genes specified in file /home/alma/ST-2018/CNNp/DGE/data/test_data/PAM50.ENSG.dat
+INFO [2018-11-16 02:58:33] Including 23209_C1 into count matrix
+INFO [2018-11-16 02:58:36] Including 23209_C1 into feature matrix
+INFO [2018-11-16 02:58:36] Including 23209_D1 into count matrix
+INFO [2018-11-16 02:58:40] Including 23209_D1 into feature matrix
+INFO [2018-11-16 02:58:41] Size Factors Computed Using scran
+INFO [2018-11-16 02:58:41] DESeq2 Matrix generated
+INFO [2018-11-16 02:58:41] Transfered size factors from scran to DESeq2
+INFO [2018-11-16 02:59:49] Using the genes specified in file /home/alma/ST-2018/CNNp/DGE/data/test_data/PAM50.ENSG.dat
+INFO [2018-11-16 02:59:49] Including 23209_C1 into count matrix
+INFO [2018-11-16 02:59:52] Including 23209_C1 into feature matrix
+INFO [2018-11-16 02:59:52] Including 23209_D1 into count matrix
+INFO [2018-11-16 02:59:56] Including 23209_D1 into feature matrix
+INFO [2018-11-16 03:05:09] Using the genes specified in file /home/alma/ST-2018/CNNp/DGE/data/test_data/PAM50.ENSG.dat
+INFO [2018-11-16 03:05:09] Including 23209_C1 into count matrix
+INFO [2018-11-16 03:05:12] Including 23209_C1 into feature matrix
+INFO [2018-11-16 03:05:12] Including 23209_D1 into count matrix
+INFO [2018-11-16 03:05:16] Including 23209_D1 into feature matrix
+INFO [2018-11-16 03:06:01] Using the genes specified in file /home/alma/ST-2018/CNNp/DGE/data/test_data/PAM50.ENSG.dat
+INFO [2018-11-16 03:06:01] Including 23209_C1 into count matrix
+INFO [2018-11-16 03:06:04] Including 23209_C1 into feature matrix
+INFO [2018-11-16 03:06:04] Including 23209_D1 into count matrix
+INFO [2018-11-16 03:06:07] Including 23209_D1 into feature matrix

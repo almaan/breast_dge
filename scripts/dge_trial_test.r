@@ -70,8 +70,7 @@ prepare_counts <-function(main_pth,single_sample){
                                    ))
   
   rownames(pasCts) <- sapply(rownames(pasCts), function(x) paste(sample_name,x, sep = '_'))
-  pasCts <- pasCts[rowSums(pasCts) > 10,]
-  
+  pasCts <- pasCts[rowSums(pasCts) > 0,]
   return(pasCts)
 }
 
@@ -112,14 +111,25 @@ main <- function() {
     }
   } 
   
-  # print(sum((rownames(coldata) %in% rownames(cnt))))
+  
+  flog.info("Initate Size Factor Estimation using scran")
+  
+  scran_size_factors <- computeSumFactors(as.matrix(t(cnt)), positive = TRUE)
+  
+  # TODO : Look into how to remedy this ugly shit
+  
+  keep_spots <- (scran_size_factors > 0.0)
+  scran_size_factors <- scran_size_factors[keep_spots]
+  cnt <- cnt[keep_spots,]
+  coldata <- coldata[keep_spots,]
+  
   coldata <- coldata[rownames(cnt),]
-  print(coldata)
   
-  
-  scran_size_factors <- SingleCellExperiment(list(counts = t(cnt)))
-  scran_size_factors <- computeSumFactors(scran_size_factors)
-  scran_size_factors = scran_size_factors@int_colData@listData$size_factor
+  if (sum(rownames(coldata) != rownames(cnt)) == 0) {
+    flog.info("Features are coherent with Count Matrix")
+  } else {
+    flog.error("Features are not coherent with Count Matrix")
+  }
   
   flog.info("Size Factors Computed Using scran")
   
@@ -128,19 +138,25 @@ main <- function() {
                                 design = design)
   
   flog.info("DESeq2 Matrix generated")
+  
   sizeFactors(dds) <- scran_size_factors
-
+  
   flog.info("Transfered size factors from scran to DESeq2")  
   
+  #ERROR : Identified Problem here
+  
   dds <- DESeq(dds, 
-               parallel = TRUE,
-               BPPARAM = N_WORKERS)
+               # parallel = TRUE,
+               # BPPARAM = N_WORKERS,
+               )
+  
+  summary(dds)
+  
   
   res <-results(dds)
-  res <- results(dds,
-                 contrast=c("f1","tumor","non-tumor"))
+  res <- results(dds,contrast=c("f1","tumor","non-tumor"))
   
-  resLFC <- lfcShri
+  #resLFC <- lfcShri
 
   print(res)
      
@@ -202,14 +218,8 @@ if (!exists(x = "design")) {
   quit(0,status = 0)
 }
 
-#matirces for DESeq2 must be gene x sample
-#print version from github git descrie 
 
-
-#COUNT_DATA_DIR <- args$count_dir
-#FEATURE_FILE_DIR = args$feature_dir
-
-#TODO : Consider wether default option for design should be includeded.
+#TODO : Consider whether default option for design should be includeded.
 
 if (!interactive()) {
   
@@ -218,7 +228,8 @@ if (!interactive()) {
   N_WORKERS <<- args$workers
   
   flog.threshold(DEBUG)
-  flog.appender(appender.file(paste(getwd(),'test_evaluate.logger',sep='/')))
+  #TODO : Consider if STDOUT or log-file should be used
+  #flog.appender(appender.file(paste(getwd(),'test_evaluate.logger',sep='/')))
   
     
   if (! typeof(args$gene_file) == "logical") {
