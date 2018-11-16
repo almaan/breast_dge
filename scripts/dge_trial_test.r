@@ -6,7 +6,7 @@ suppressPackageStartupMessages(library("docstring"))
 suppressPackageStartupMessages(library("optparse"))
 suppressPackageStartupMessages(library("futile.logger"))
 
-
+call("git describe --tags")
 
 extract_names <- function(string){
   #' Extracts sample id and replicate provided
@@ -32,6 +32,7 @@ merge_matrices <- function(M1,M2, na_fill = 0.0){
   
   r1_names <- rownames(M1)
   r2_names <- rownames(M2)
+  
   M1 <- bind_rows(M1,M2)
   rownames(M1) <- c(r1_names,r2_names)
   M1[is.na(M1)] = na_fill
@@ -41,18 +42,46 @@ merge_matrices <- function(M1,M2, na_fill = 0.0){
 
 prepare_counts <-function(main_pth,single_sample){
   #'
+  #'
+  
   full_pth <- paste(main_pth,single_sample,sep = "/")
   sample_name <- extract_names(single_sample)
-  pasCts <- as.data.frame(read.csv(full_pth,sep = '\t',header = TRUE, row.names = 1))
+  
+  flog.info(paste(c('Including', sample_name, "into count matrix"), collapse = " "))
+  
+  if (!typeof(SELECTED_GENES) == "logical"){
+    
+    header <- unlist(strsplit(readLines(file(full_pth), n = 1),'\t'))
+    close(file(full_pth))
+    
+    gene_names <- which(header %in% SELECTED_GENES)
+    colclass <- replicate(length(header), NULL)
+    colclass[gene_names] <- NA
+    colclass[1] <- NA
+    
+    remove(header)
+  } 
+  
+  pasCts <- as.data.frame(read.csv(full_pth,
+                                   sep = '\t',
+                                   header = TRUE,
+                                   colClasses = colclass,
+                                   row.names = 1,
+                                   ))
+  
   rownames(pasCts) <- sapply(rownames(pasCts), function(x) paste(sample_name,x, sep = '_'))
+  pasCts <- pasCts[rowSums(pasCts) > 10,]
+  
   return(pasCts)
 }
 
 prepare_coldata <- function(feature_file_dir,single_sample) {
   
   sample_name <- extract_names(single_sample)
-  patient_id <- strsplit(sample_name,'-')[1]
-  replicate <- strsplit(sample_name,'-')[2]
+  flog.info(paste(c('Including', sample_name, "into feature matrix"), collapse = " "))
+  
+  patient_id <- unlist(strsplit(sample_name,'_'))[1]
+  replicate <- unlist(strsplit(sample_name,'_'))[2]
   
   full_pth <- paste(paste(feature_file_dir, paste('feature_data',sample_name,sep='-'), sep = '/'),'tsv', sep = '.')
   
@@ -61,7 +90,6 @@ prepare_coldata <- function(feature_file_dir,single_sample) {
   cdata['replicate'] <- replicate
   
   stem_name <- apply(cdata[c("x_coord","y_coord")], 1, paste, collapse = "x")
-  
   rownames(cdata) <- sapply(stem_name, function(x) paste(sample_name,x,sep='_'))
 
   return(cdata)
@@ -84,21 +112,26 @@ main <- function() {
     }
   } 
   
-  size_factors <- SingleCellExperiment(list(counts = t(cnt)))
-  size_factors <- computeSumFactors(size_factors)
-  size_factors = size_factors@int_colData@listData$size_factor
-
+  # print(sum((rownames(coldata) %in% rownames(cnt))))
+  coldata <- coldata[rownames(cnt),]
+  print(coldata)
+  
+  
+  scran_size_factors <- SingleCellExperiment(list(counts = t(cnt)))
+  scran_size_factors <- computeSumFactors(scran_size_factors)
+  scran_size_factors = scran_size_factors@int_colData@listData$size_factor
+  
+  flog.info("Size Factors Computed Using scran")
+  
   dds <- DESeqDataSetFromMatrix(countData = t(cnt),
                                 colData = coldata,
                                 design = design)
   
+  flog.info("DESeq2 Matrix generated")
+  sizeFactors(dds) <- scran_size_factors
+
+  flog.info("Transfered size factors from scran to DESeq2")  
   
-  sizeFactors(dds) <- size_factors
-  
-  #for easy testing
-  keep <- rowSums(counts(dds)) >= 40
-  
-  dds <- dds[keep,]
   dds <- DESeq(dds, 
                parallel = TRUE,
                BPPARAM = N_WORKERS)
@@ -131,19 +164,19 @@ parser <- add_option(parser,
                                   collapse = " "),
                       )
 
-#TODO: Implement gene list parsing
 
-# parser <- add_option(parser,
-#                      c("-g", "--gene_list"),
-#                      help = paste(c("list of genes to be included in DGE analysis.",
-#                                     "each row shall contain name of gene.",
-#                                     'if no list provided all genes will be used.'),
-#                                   collapse = " "),
-#                      )
+parser <- add_option(parser,
+                     c("-g", "--gene_file"),
+                     default =  NULL,
+                     help = paste(c("list of genes to be included in DGE analysis.",
+                                    "each row shall contain name of gene.",
+                                    'if no list provided all genes will be used.'),
+                                  collapse = " "),
+                     )
 
 
 parser <- add_option(parser,
-                     c("-c", "--design"),
+                     c("-d", "--design"),
                      help = paste(c("design file to be used in DGE-analysis.",
                                     "explictily states what features from the",
                                     "feature files that should be used."),
@@ -169,8 +202,6 @@ if (!exists(x = "design")) {
   quit(0,status = 0)
 }
 
-
-
 #matirces for DESeq2 must be gene x sample
 #print version from github git descrie 
 
@@ -180,20 +211,29 @@ if (!exists(x = "design")) {
 
 #TODO : Consider wether default option for design should be includeded.
 
-# 
-# stp <- TRUE
-# if (stp == TRUE) {
-#   quit(0, status = 0)
-# }
-
 if (!interactive()) {
   
   COUNT_DATA_DIR <<- args$count_dir
   FEATURE_FILE_DIR <<- args$feature_dir
   N_WORKERS <<- args$workers
+  
+  flog.threshold(DEBUG)
+  flog.appender(appender.file(paste(getwd(),'test_evaluate.logger',sep='/')))
+  
+    
+  if (! typeof(args$gene_file) == "logical") {
+    
+    SELECTED_GENES <<- read.csv(args$gene_file, header = FALSE)[,1]
+    flog.info(paste(c("Using the genes specified in file", args$gene_file), collapse = " "))
+  } else {
+    SELECTED_GENES <<- FALSE
+    flog.info("Using union of all genes.")
+  }
+  
   main()
-  #  SELECTED_GENES <- args$
+
 } else {
+  
   print("Run via terminal for proper activation.")
   
 }
