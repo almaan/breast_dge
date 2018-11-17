@@ -157,12 +157,13 @@ main <- function() {
   
   scran_size_factors <- computeSumFactors(as.matrix(t(cnt)), positive = TRUE)
   
+  flog.info("Size Factors Computed Using scran")
+  
   # TODO : Look into how to remedy this ugly shit
   
   keep_spots <- (scran_size_factors > 0.0)
   scran_size_factors <- scran_size_factors[keep_spots]
   cnt <- cnt[keep_spots,]
-  coldata <- coldata[keep_spots,]
   
   coldata <- coldata[rownames(cnt),]
   
@@ -170,9 +171,9 @@ main <- function() {
     flog.info("Features are coherent with Count Matrix")
   } else {
     flog.error("Features are not coherent with Count Matrix")
+    quit("no",0)
   }
   
-  flog.info("Size Factors Computed Using scran")
   
   dds <- DESeqDataSetFromMatrix(countData = t(cnt),
                                 colData = coldata,
@@ -184,19 +185,16 @@ main <- function() {
   
   flog.info("Transfered size factors from scran to DESeq2")  
   
-  
   dds <- DESeq(dds, 
-               parallel = TRUE,
-               BPPARAM = N_WORKERS,
-               )
+              parallel = TRUE,
+              BPPARAM = bpparam("SnowParam"),
+              )
   
-  summary(dds)
-  
+  flog.info("DESeq estimation successfull")
   
   res <-results(dds)
   res <- results(dds,contrast=c("f1","tumor","non-tumor"))
   
-  #resLFC <- lfcShri
 
   print(res)
      
@@ -210,6 +208,17 @@ parser <- add_option(parser,
                                     "matrix name should be on form",
                                     '"count_data-ID_Replicate.tsv"'),
                                   collapse = " "),
+                    )
+
+
+parser <- add_option(parser,
+                    c("-o", "--output_dir"),
+                    default = getwd(),
+                    type = "character",
+                    help = paste(c("directory to save output into.",
+                                   "if none specified cwd will be used."),
+                                 collapse = " "),
+                    
                     )
 
 parser <- add_option(parser,
@@ -245,6 +254,7 @@ parser <- add_option(parser,
                                     "if non given half of maximum will be used.",
                                     "must be an integer"),
                                   collapse = " "),
+                     type = "integer",
                      default = floor(detectCores()/2)
 )
 
@@ -265,8 +275,15 @@ if (!interactive()) {
   
   COUNT_DATA_DIR <<- args$count_dir
   FEATURE_FILE_DIR <<- args$feature_dir
-  N_WORKERS <<- args$workers
+  OUTPUT_DIR <<- args$output_dir
   
+  snowparam <- SnowParam(workers = args$workers, type = "SOCK")
+  register(snowparam, default = TRUE)
+  registered()
+  
+  
+  flog.info(paste(c(args$workers, "cores are being used for computation"), collapse = " "))
+    
   flog.threshold(DEBUG)
   #TODO : Consider if STDOUT or log-file should be used
   #flog.appender(appender.file(paste(getwd(),'test_evaluate.logger',sep='/')))
