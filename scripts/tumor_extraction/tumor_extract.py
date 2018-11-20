@@ -18,11 +18,14 @@ import os
 import re
 
 import argparse as arp
-#import logger
+import logging
+
+import datetime
 
 plt.style.use('ggplot')
 
 #TODO : Add docstrings to functions
+#TODO : Add logger througout procedure
 
 def _load_file(filename):
     df = pd.read_csv(filename,
@@ -73,6 +76,26 @@ def plot_section(dataframe):
                    )
     
     fig.show()
+
+def configure_logger(logger):
+        
+        timestamp = '-'.join(str(datetime.datetime.now()).split(' ')).split('.')[0]
+    
+        c_handler = logging.StreamHandler()
+        f_handler = logging.FileHandler(''.join(['tumor_extraction-', timestamp, '.log']))
+        
+        c_handler.setLevel(logging.INFO)
+        f_handler.setLevel(logging.INFO)
+        
+        c_format = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+        f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        
+        c_handler.setFormatter(c_format)
+        f_handler.setFormatter(f_format)
+        
+        logger.addHandler(c_handler)
+        logger.addHandler(f_handler)
+        
 
 def distance(x,y_vec):
     return np.array([l1(x,y) for y in y_vec])
@@ -269,6 +292,21 @@ if __name__ == '__main__':
     
     args = prs.parse_args()
     
+    logging.basicConfig(level = logging.INFO, filename = os.devnull)
+    logger = logging.getLogger('te_logger')
+    configure_logger(logger)
+    
+# TODO : print argparse input rather than manually configured parameter choice
+    
+    logger.info(f'Tumor Extraction Performed {str(datetime.datetime.now()):s}')
+    logger.info('\n'.join([f'Using the following parameters:',
+                           f'min_spot = {args.min_spot:d}',
+                           f'max_dist = {args.max_dist:f}',
+                           f'min_tumor_spots = {args.min_tumor_spots:d}'],
+                            ))
+    
+# TODO : Move this to main-function being called
+    
     if osp.isdir(args.input):
         all_files = os.listdir(args.input)
         
@@ -315,7 +353,11 @@ if __name__ == '__main__':
         tumor_labels = label_to_tumor_id(labels)
         df['tumor_id'] = tumor_labels
         
-        output = osp.join('_'.join([_get_sample_name(args.input), 'tumor_separation.tsv']))
+        if osp.isdir(args.output):
+            output = osp.join(args.output,'_'.join([_get_sample_name(args.input), 'tumor_separation.tsv']))
+        else:
+            output = osp.join('_'.join([_get_sample_name(args.input), 'tumor_separation.tsv']))
+
         df.to_csv(output, sep = '\t', header = True, index = True)
         
         if args.plot:
@@ -327,7 +369,11 @@ if __name__ == '__main__':
             crd = get_coordinates(df)
             fig, ax = VisualizeTumorSelection(crd, labels, sample_name = _get_sample_name(osp.basename(args.input)))
             
-            img_output = osp.join('_'.join([_get_sample_name(args.input), 'tumor_separation.png']))
+            if osp.isdir(args.output):
+                img_output = osp.join(args.output,'_'.join([_get_sample_name(args.input), 'tumor_separation.png']))
+            else:
+                img_output = osp.join('_'.join([_get_sample_name(args.input), 'tumor_separation.png']))
+                
             fig.savefig(img_output)
         
         plt.close('all')
