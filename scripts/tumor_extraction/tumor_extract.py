@@ -18,7 +18,7 @@ import os
 import re
 
 import argparse as arp
-import logger
+#import logger
 
 plt.style.use('ggplot')
 
@@ -164,8 +164,9 @@ def ExtractTumors(df,
     
 def VisualizeTumorSelection(data,
                             labels,
+                            sample_name,
                             figsize = (10,5),
-                            marker_size = 100,
+                            marker_size = 80,
                             annotations = ['tumor', 'non']):
     
     unique_labels = np.unique(labels)
@@ -192,7 +193,7 @@ def VisualizeTumorSelection(data,
     
     ax[0].set_aspect("equal")
     ax[0].grid(False)
-    ax[0].set_title('Tumor Separation Result')
+    ax[0].set_title(' '.join([sample_name, 'Tumor Separation Result']))
     ax[0].set_ylim([0,35])
     ax[0].set_xlim([0,33])
     
@@ -291,12 +292,12 @@ if __name__ == '__main__':
             
             if args.plot:
                 crd = get_coordinates(df)
-                fig, ax = VisualizeTumorSelection(crd, labels)
+                fig, ax = VisualizeTumorSelection(crd, labels, sample_name=_get_sample_name(single_file))
                 plt.show()
             
             if args.save_plot:
                 crd = get_coordinates(df)
-                fig, ax = VisualizeTumorSelection(crd, labels)
+                fig, ax = VisualizeTumorSelection(crd, labels, sample_name=_get_sample_name(single_file))
                 
                 img_output = osp.join(args.output,'_'.join([_get_sample_name(single_file), 'tumor_separation.png']))
                 fig.savefig(img_output)
@@ -319,12 +320,12 @@ if __name__ == '__main__':
         
         if args.plot:
                 crd = get_coordinates(df)
-                fig, ax = VisualizeTumorSelection(crd, labels)
+                fig, ax = VisualizeTumorSelection(crd, labels, sample_name = _get_sample_name(osp.basename(args.input)))
                 plt.show()
             
         if args.save_plot:
             crd = get_coordinates(df)
-            fig, ax = VisualizeTumorSelection(crd, labels)
+            fig, ax = VisualizeTumorSelection(crd, labels, sample_name = _get_sample_name(osp.basename(args.input)))
             
             img_output = osp.join('_'.join([_get_sample_name(args.input), 'tumor_separation.png']))
             fig.savefig(img_output)
