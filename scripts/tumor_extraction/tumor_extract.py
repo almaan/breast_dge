@@ -13,6 +13,9 @@ from scipy.spatial.distance import cityblock as l1
 
 import matplotlib.pyplot as plt
 
+import subprocess as sp
+import sys
+
 import os.path as osp
 import os
 import re
@@ -27,6 +30,7 @@ plt.style.use('ggplot')
 #TODO : Add docstrings to functions
 #TODO : Add logger througout procedure
 
+
 def _load_file(filename):
     df = pd.read_csv(filename,
                      sep = '\t',
@@ -35,17 +39,57 @@ def _load_file(filename):
     df.columns = ['xcoord'] + df.columns.tolist()[0:-1]
     return df
 
+
+def _version_control():
+    file_dir = osp.dirname(osp.abspath(__file__))
+    current_dir = os.getcwd()
+    
+    commands = [f"cd {file_dir:s}",
+                f"git describe --tags",
+                f"cd {current_dir:s}"]
+    
+    
+    return_values = []
+    for cmd in commands:
+        proc = sp.Popen(cmd, shell = True, stdout=sp.PIPE)
+        return_values.append(proc.communicate()[0])
+    
+    version = return_values[1].decode('utf-8').replace('\n','')
+    
+    return version
+
+
 def _get_sample_name(filename):
     pattern = '[A-Z]{2}\d{5}[_][A-Z]\d'
     return re.search(pattern, filename)[0]
 
     
-def get_coordinates(df):
+def _get_coordinates(df):
     x_coord = df['xcoord'].values.reshape(-1,1)
     y_coord = df['ycoord'].values.reshape(-1,1)
     
     return np.hstack((x_coord,y_coord))
     
+
+def log_header():
+    
+    time = str(datetime.datetime.now())
+    logging.info("Time of execution : {time:s}")
+    
+    try:
+        cl = ' '.join(sys.argv)
+        logging.info("shell command : {cl:s} ")
+    except Exception as e:
+        logging.error(f"could not capture shell command : {e:s}")
+    
+    try:
+        version = _version_control()
+        logging.info(f"git version : {version:s}")
+    except Exception as e:
+        logging.error(f"could not stat git version : {e:s}")
+    
+    logging.info(f"software file-path : {osp.abspath(__file__):s}")
+    logging.info(f"current working directory : {os.getcwd():s}")
 
 def label_to_tumor_id(idx_list,
                    prefix = 'T',
@@ -77,7 +121,10 @@ def plot_section(dataframe):
     
     fig.show()
 
-def configure_logger(logger):
+def configure_logger():
+
+        logger = logging.basicConfig(level = logging.INFO, filename = os.devnull)
+        logger = logging.getLogger('te_logger')
         
         timestamp = '-'.join(str(datetime.datetime.now()).split(' ')).split('.')[0]
     
@@ -100,14 +147,14 @@ def configure_logger(logger):
 def distance(x,y_vec):
     return np.array([l1(x,y) for y in y_vec])
 
-def TumorScan(data,
+def tumorScan(data,
               minSpt,
               maxDist,
               minTumor = 5,
               ):
     
     
-    def Propagate(idx,
+    def propagate(idx,
                   data,
                   minSpt,
                   maxDist,
@@ -147,17 +194,11 @@ def TumorScan(data,
                 
         return clusters
             
-    rnd = np.arange(data.shape[0])
-    np.random.shuffle(rnd)
-    data = data[rnd, :]
-    
     clusters = np.ones(data.shape[0])*(-1)
 
     for ii in range(clusters.shape[0]):
         if clusters[ii] == -1:
-            clusters = Propagate(ii, data, minSpt, maxDist, clusters)
-    
-    clusters = clusters[np.argsort(rnd)]
+            clusters = propagate(ii, data, minSpt, maxDist, clusters)
     
     if minTumor > 0:
         for cidx in np.unique(clusters):
@@ -166,7 +207,7 @@ def TumorScan(data,
     
     return clusters
         
-def ExtractTumors(df,
+def extractTumors(df,
                   minSpt,
                   maxDist,
                   minTumor,
@@ -174,18 +215,18 @@ def ExtractTumors(df,
                   select_for = 'tumor',
                   ):
     
-    crd = get_coordinates(df)
+    crd = _get_coordinates(df)
     
     all_cluster_labels = np.ones(crd.shape[0])*(-1)
     tumor_idx = np.where((df[feature] == select_for))
-    tumor_cluster_labels = TumorScan(crd[tumor_idx], minSpt=minSpt, maxDist=maxDist, minTumor=minTumor)
+    tumor_cluster_labels = tumorScan(crd[tumor_idx], minSpt=minSpt, maxDist=maxDist, minTumor=minTumor)
     
     all_cluster_labels[tumor_idx] = tumor_cluster_labels
     
     return all_cluster_labels
 
     
-def VisualizeTumorSelection(data,
+def visualizeTumorSelection(data,
                             labels,
                             sample_name,
                             figsize = (10,5),
@@ -195,21 +236,22 @@ def VisualizeTumorSelection(data,
     unique_labels = np.unique(labels)
     annotated_cmap = {annotations[0] : 'red', annotations[1] : 'green'}
     colormap = plt.cm.Dark2(np.arange(unique_labels.shape[0]))
-    
+    crd = _get_coordinates(data)
+
     fig, ax = plt.subplots(1,2, figsize = figsize)
     
     for (color, label_idx) in zip(colormap,np.unique(labels)):
             
             pos = (labels == label_idx)
             if label_idx >= 0:
-                ax[0].scatter(x = data[pos,0],
-                              y = data[pos,1],
+                ax[0].scatter(x = crd[pos,0],
+                              y = crd[pos,1],
                               s = marker_size,
                               edgecolors = 'black',
                               c = color)
             else:
-                ax[0].scatter(x = data[pos,0],
-                              y = data[pos,1],
+                ax[0].scatter(x = crd[pos,0],
+                              y = crd[pos,1],
                               c = 'k',
                               alpha = 0.3,
                               s = marker_size)
@@ -221,8 +263,12 @@ def VisualizeTumorSelection(data,
     ax[0].set_xlim([0,33])
     
     for annotated_label in annotations:
-        pos = (df['tumor'] == annotated_label)
-        ax[1].scatter(crd[pos,0],crd[pos,1], c = annotated_cmap[annotated_label], s = marker_size)    
+        pos = (data['tumor'] == annotated_label)
+        
+        ax[1].scatter(x= crd[pos,0],
+                      y = crd[pos,1],
+                      c = annotated_cmap[annotated_label],
+                      s = marker_size)    
     
     ax[1].set_aspect("equal")
     ax[1].grid(False)
@@ -235,8 +281,112 @@ def VisualizeTumorSelection(data,
     return fig, ax
 
 
+def main(input_name,
+         output_name,
+         plot,
+         save_plot,
+         min_spot,
+         max_dist,
+         min_tumor_spots,
+         ):
 
+    if osp.isdir(input_name):
+        all_files = os.listdir(input_name)
+        
+        for single_file in all_files:
+            
+            df = _load_file(osp.join(input_name, single_file))
+            
+            labels = extractTumors(df, 
+                                   minSpt= min_spot,
+                                   maxDist = max_dist,
+                                   minTumor = min_tumor_spots)
+            
+            tumor_labels = label_to_tumor_id(labels)
+            
+            df['tumor_id'] = tumor_labels
+            
+            if not osp.isdir(output_name):
+                os.mkdir(output_name)
+                
+            file_output = osp.join(output_name,
+                              '_'.join([_get_sample_name(single_file), 'tumor_separation.tsv']))
+            
+            df.to_csv(file_output,
+                      sep = '\t', 
+                      header = True,
+                      index = True)
+            
+            if plot:
+#                crd = _get_coordinates(df)
+                fig, ax = visualizeTumorSelection(df,
+                                                  labels,
+                                                  sample_name=_get_sample_name(single_file),
+                                                  )
+                plt.show()
+            
+            if save_plot:
+#                crd = _get_coordinates(df)
+                fig, ax = visualizeTumorSelection(df,
+                                                  labels,
+                                                  sample_name=_get_sample_name(single_file),
+                                                  )
+                
+                img_output = osp.join(output_name,
+                                      '_'.join([_get_sample_name(single_file), 'tumor_separation.png']),
+                                      )
+                fig.savefig(img_output)
+                
+            plt.close('all')
+            
+    elif osp.isfile(input_name):
+        
+        df = _load_file(input_name)
+        
+        labels = extractTumors(df, 
+                               minSpt= min_spot,
+                               maxDist = max_dist,
+                               minTumor = min_tumor_spots)
+            
+        tumor_labels = label_to_tumor_id(labels)
+        
+        df['tumor_id'] = tumor_labels
+        
+        if osp.isdir(output_name):
+            file_output = osp.join(output_name,'_'.join([_get_sample_name(input_name), 'tumor_separation.tsv']))
+        
+        else:
+            file_output = osp.join('_'.join([_get_sample_name(input_name), 'tumor_separation.tsv']))
 
+        df.to_csv(file_output, sep = '\t', header = True, index = True)
+        
+        if plot:
+#                crd = _get_coordinates(df)
+                fig, ax = visualizeTumorSelection(df, 
+                                                  labels,
+                                                  sample_name = _get_sample_name(osp.basename(input_name)),
+                                                  )
+                plt.show()
+            
+        if save_plot:
+#            crd = _get_coordinates(df)
+            fig, ax = visualizeTumorSelection(df,
+                                              labels,
+                                              sample_name = _get_sample_name(osp.basename(input_name)),
+                                              )
+            
+            if osp.isdir(output_name):
+                img_output = osp.join(output_name,
+                                      '_'.join([_get_sample_name(input_name), 'tumor_separation.png']),
+                                      )
+            else:
+                img_output = osp.join('_'.join([_get_sample_name(input_name), 'tumor_separation.png']))
+                
+            fig.savefig(img_output)
+        
+        plt.close('all')
+
+#%%
 if __name__ == '__main__':
 
 # TODO : Add help information to all arguments
@@ -292,90 +442,17 @@ if __name__ == '__main__':
     
     args = prs.parse_args()
     
-    logging.basicConfig(level = logging.INFO, filename = os.devnull)
-    logger = logging.getLogger('te_logger')
-    configure_logger(logger)
+    configure_logger()
+    log_header()
     
-# TODO : print argparse input rather than manually configured parameter choice
+    arguments = dict(input_name = args.input,
+                     output_name = args.output,
+                     plot = args.plot,
+                     save_plot = args.save_plot,
+                     min_spot = args.min_spot,
+                     max_dist = args.max_dist,
+                     min_tumor_spots = args.min_tumor_spots,
+                     )
     
-    logger.info(f'Tumor Extraction Performed {str(datetime.datetime.now()):s}')
-    logger.info('\n'.join([f'Using the following parameters:',
-                           f'min_spot = {args.min_spot:d}',
-                           f'max_dist = {args.max_dist:f}',
-                           f'min_tumor_spots = {args.min_tumor_spots:d}'],
-                            ))
-    
-# TODO : Move this to main-function being called
-    
-    if osp.isdir(args.input):
-        all_files = os.listdir(args.input)
-        
-        for single_file in all_files:
-            
-            df = _load_file(osp.join(args.input, single_file))
-            labels = ExtractTumors(df, 
-                                   minSpt= args.min_spot,
-                                   maxDist = args.max_dist,
-                                   minTumor = args.min_tumor_spots)
-            
-            tumor_labels = label_to_tumor_id(labels)
-            
-            df['tumor_id'] = tumor_labels
-            
-            if not osp.isdir(args.output):
-                os.mkdir(args.output)
-                
-            output = osp.join(args.output,'_'.join([_get_sample_name(single_file), 'tumor_separation.tsv']))
-            df.to_csv(output, sep = '\t', header = True, index = True)
-            
-            if args.plot:
-                crd = get_coordinates(df)
-                fig, ax = VisualizeTumorSelection(crd, labels, sample_name=_get_sample_name(single_file))
-                plt.show()
-            
-            if args.save_plot:
-                crd = get_coordinates(df)
-                fig, ax = VisualizeTumorSelection(crd, labels, sample_name=_get_sample_name(single_file))
-                
-                img_output = osp.join(args.output,'_'.join([_get_sample_name(single_file), 'tumor_separation.png']))
-                fig.savefig(img_output)
-                
-            plt.close('all')
-            
-    elif osp.isfile(args.input):
-        
-        df = _load_file(args.input)
-        labels = ExtractTumors(df, 
-                                   minSpt= args.min_spot,
-                                   maxDist = args.max_dist,
-                                   minTumor = args.min_tumor_spots)
-            
-        tumor_labels = label_to_tumor_id(labels)
-        df['tumor_id'] = tumor_labels
-        
-        if osp.isdir(args.output):
-            output = osp.join(args.output,'_'.join([_get_sample_name(args.input), 'tumor_separation.tsv']))
-        else:
-            output = osp.join('_'.join([_get_sample_name(args.input), 'tumor_separation.tsv']))
-
-        df.to_csv(output, sep = '\t', header = True, index = True)
-        
-        if args.plot:
-                crd = get_coordinates(df)
-                fig, ax = VisualizeTumorSelection(crd, labels, sample_name = _get_sample_name(osp.basename(args.input)))
-                plt.show()
-            
-        if args.save_plot:
-            crd = get_coordinates(df)
-            fig, ax = VisualizeTumorSelection(crd, labels, sample_name = _get_sample_name(osp.basename(args.input)))
-            
-            if osp.isdir(args.output):
-                img_output = osp.join(args.output,'_'.join([_get_sample_name(args.input), 'tumor_separation.png']))
-            else:
-                img_output = osp.join('_'.join([_get_sample_name(args.input), 'tumor_separation.png']))
-                
-            fig.savefig(img_output)
-        
-        plt.close('all')
-        
+    main(**arguments)
 
