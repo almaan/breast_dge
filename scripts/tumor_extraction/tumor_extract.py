@@ -74,22 +74,22 @@ def _get_coordinates(df):
 def log_header():
     
     time = str(datetime.datetime.now())
-    logging.info("Time of execution : {time:s}")
+    logger.info(f"time of execution : {time:s}")
     
     try:
         cl = ' '.join(sys.argv)
-        logging.info("shell command : {cl:s} ")
+        logger.info(f"shell command : {cl:s} ")
     except Exception as e:
-        logging.error(f"could not capture shell command : {e:s}")
+        logger.error(f"could not capture shell command : {e:s}")
     
     try:
         version = _version_control()
-        logging.info(f"git version : {version:s}")
+        logger.info(f"git version : {version:s}")
     except Exception as e:
-        logging.error(f"could not stat git version : {e:s}")
+        logger.error(f"could not stat git version : {e:s}")
     
-    logging.info(f"software file-path : {osp.abspath(__file__):s}")
-    logging.info(f"current working directory : {os.getcwd():s}")
+    logger.info(f"software file-path : {osp.abspath(__file__):s}")
+    logger.info(f"current working directory : {os.getcwd():s}")
 
 def label_to_tumor_id(idx_list,
                    prefix = 'T',
@@ -121,15 +121,12 @@ def plot_section(dataframe):
     
     fig.show()
 
-def configure_logger():
-
-        logger = logging.basicConfig(level = logging.INFO, filename = os.devnull)
-        logger = logging.getLogger('te_logger')
+def configure_logger(logger):
         
         timestamp = '-'.join(str(datetime.datetime.now()).split(' ')).split('.')[0]
     
         c_handler = logging.StreamHandler()
-        f_handler = logging.FileHandler(''.join(['tumor_extraction-', timestamp, '.log']))
+        f_handler = logging.FileHandler(osp.join(os.getcwd(),''.join(['tumor_extraction-', timestamp, '.log'])))
         
         c_handler.setLevel(logging.INFO)
         f_handler.setLevel(logging.INFO)
@@ -291,56 +288,73 @@ def main(input_name,
          ):
 
     if osp.isdir(input_name):
-        all_files = os.listdir(input_name)
         
-        for single_file in all_files:
-            
-            df = _load_file(osp.join(input_name, single_file))
-            
-            labels = extractTumors(df, 
-                                   minSpt= min_spot,
-                                   maxDist = max_dist,
-                                   minTumor = min_tumor_spots)
-            
-            tumor_labels = label_to_tumor_id(labels)
-            
-            df['tumor_id'] = tumor_labels
-            
-            if not osp.isdir(output_name):
-                os.mkdir(output_name)
+        logger.info("reading multiple files from {input_name:s} : MULTIPLE FILE MODE")
+        
+        all_files = os.listdir(input_name)
+        n_files = len(all_files)
+        
+        logger.info(f"{n_files:d} were found. ")
+        
+        for (num,single_file) in enumerate(all_files):
+            try:
+                df = _load_file(osp.join(input_name, single_file))
                 
-            file_output = osp.join(output_name,
-                              '_'.join([_get_sample_name(single_file), 'tumor_separation.tsv']))
-            
-            df.to_csv(file_output,
-                      sep = '\t', 
-                      header = True,
-                      index = True)
+                labels = extractTumors(df, 
+                                       minSpt= min_spot,
+                                       maxDist = max_dist,
+                                       minTumor = min_tumor_spots)
+                
+                tumor_labels = label_to_tumor_id(labels)
+                
+                df['tumor_id'] = tumor_labels
+                
+                if not osp.isdir(output_name):
+                    os.mkdir(output_name)
+                    
+                file_output = osp.join(output_name,
+                                  '_'.join([_get_sample_name(single_file), 'tumor_separation.tsv']))
+                
+                df.to_csv(file_output,
+                          sep = '\t', 
+                          header = True,
+                          index = True)
+                
+                logger.info(f"successfully processed file {single_file:s}")
+            except Exception as e:
+                logger.error(f"could not process file {single_file:s} : {e:s}")
             
             if plot:
-#                crd = _get_coordinates(df)
-                fig, ax = visualizeTumorSelection(df,
-                                                  labels,
-                                                  sample_name=_get_sample_name(single_file),
-                                                  )
-                plt.show()
+                try:
+                    fig, ax = visualizeTumorSelection(df,
+                                                      labels,
+                                                      sample_name=_get_sample_name(single_file),
+                                                      )
+                    plt.show()
+                except Exception as e:
+                    logger.error(f"could not plot cluster result of {single_file:s}")
             
             if save_plot:
-#                crd = _get_coordinates(df)
-                fig, ax = visualizeTumorSelection(df,
-                                                  labels,
-                                                  sample_name=_get_sample_name(single_file),
-                                                  )
-                
-                img_output = osp.join(output_name,
-                                      '_'.join([_get_sample_name(single_file), 'tumor_separation.png']),
-                                      )
-                fig.savefig(img_output)
+                try:
+                    fig, ax = visualizeTumorSelection(df,
+                                                      labels,
+                                                      sample_name=_get_sample_name(single_file),
+                                                      )
+                    
+                    img_output = osp.join(output_name,
+                                          '_'.join([_get_sample_name(single_file), 'tumor_separation.png']),
+                                          )
+                    fig.savefig(img_output)
+                    logger.info(f"successfully saved image of {single_file:s} clustering at : {img_output:s})
+                except Exception as e:
+                    logger.error(f"could not save image of {single_file:s} : {e:s}")
+                    
+                    
                 
             plt.close('all')
             
     elif osp.isfile(input_name):
-        
+        logger.info(f"reading file from {input_name:s} : SINGLE FILE MODE")
         df = _load_file(input_name)
         
         labels = extractTumors(df, 
@@ -361,29 +375,36 @@ def main(input_name,
         df.to_csv(file_output, sep = '\t', header = True, index = True)
         
         if plot:
-#                crd = _get_coordinates(df)
+            try:
                 fig, ax = visualizeTumorSelection(df, 
                                                   labels,
                                                   sample_name = _get_sample_name(osp.basename(input_name)),
                                                   )
                 plt.show()
+            except Exception as e:
+                logger.info()
             
         if save_plot:
-#            crd = _get_coordinates(df)
-            fig, ax = visualizeTumorSelection(df,
-                                              labels,
-                                              sample_name = _get_sample_name(osp.basename(input_name)),
-                                              )
-            
-            if osp.isdir(output_name):
-                img_output = osp.join(output_name,
-                                      '_'.join([_get_sample_name(input_name), 'tumor_separation.png']),
-                                      )
-            else:
-                img_output = osp.join('_'.join([_get_sample_name(input_name), 'tumor_separation.png']))
+            try:
+                fig, ax = visualizeTumorSelection(df,
+                                                  labels,
+                                                  sample_name = _get_sample_name(osp.basename(input_name)),
+                                                  )
                 
-            fig.savefig(img_output)
+                if osp.isdir(output_name):
+                    img_output = osp.join(output_name,
+                                          '_'.join([_get_sample_name(input_name), 'tumor_separation.png']),
+                                          )
+                else:
+                    img_output = osp.join('_'.join([_get_sample_name(input_name), 'tumor_separation.png']))
+                    
+                fig.savefig(img_output)
+            
+            logger.info(f"successfully saved image of {input_name:s} at : {img_output:s}")
         
+        except Exception as e:
+            logger.error(f"could not save image of {input_name:s} cluster result : {e:s}")
+       
         plt.close('all')
 
 #%%
@@ -442,7 +463,11 @@ if __name__ == '__main__':
     
     args = prs.parse_args()
     
-    configure_logger()
+    
+    logger = logging.basicConfig(level = logging.INFO, filename = os.devnull)
+    logger = logging.getLogger('te_log')
+    
+    configure_logger(logger)
     log_header()
     
     arguments = dict(input_name = args.input,
