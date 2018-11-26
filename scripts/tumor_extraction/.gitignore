@@ -3,7 +3,9 @@
 #ignore output
 output_results*/
 #ignore images
-*.{png,jpg,gif}
+*.png
+*.jpg
+*.gif
 #ignore .tsv files
 *.tsv
 
