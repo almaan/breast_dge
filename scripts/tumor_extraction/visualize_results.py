@@ -56,6 +56,7 @@ grid_size = get_format(n_images, width, height, desired_format)
 
 k = 0
 background = IMG.new('RGBA',(new_width*(grid_size[0]+1), new_height*(grid_size[1]+1)), (255, 255, 255, 255))
+
 for jj in range(0,int(grid_size[1]+1)):
     for ii in range(0,int(grid_size[0]+1)):
         if k < n_images:
@@ -67,4 +68,4 @@ for jj in range(0,int(grid_size[1]+1)):
             break
         
         
-background.save('test.png')
+background.save('clustering_result.png')
