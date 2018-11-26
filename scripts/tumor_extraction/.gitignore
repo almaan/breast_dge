@@ -8,4 +8,5 @@ output_results*/
 *.gif
 #ignore .tsv files
 *.tsv
-
+#version ctrl
+*version_control*
