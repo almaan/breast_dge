@@ -1,0 +1,6 @@
+#ignore logs
+*.log
+#ignore output
+output_results/
+
+
