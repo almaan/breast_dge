@@ -345,7 +345,7 @@ def main(input_name,
                                           '_'.join([_get_sample_name(single_file), 'tumor_separation.png']),
                                           )
                     fig.savefig(img_output)
-                    logger.info(f"successfully saved image of {single_file:s} clustering at : {img_output:s})
+                    logger.info(f"successfully saved image of {single_file:s} clustering at : {img_output:s}")
                 except Exception as e:
                     logger.error(f"could not save image of {single_file:s} : {e:s}")
                     
@@ -382,7 +382,7 @@ def main(input_name,
                                                   )
                 plt.show()
             except Exception as e:
-                logger.info()
+                logger.info(f"could not generate plot : {e:s}")
             
         if save_plot:
             try:
@@ -400,12 +400,13 @@ def main(input_name,
                     
                 fig.savefig(img_output)
             
-            logger.info(f"successfully saved image of {input_name:s} at : {img_output:s}")
+                logger.info(f"successfully saved image of {input_name:s} at : {img_output:s}")
         
-        except Exception as e:
-            logger.error(f"could not save image of {input_name:s} cluster result : {e:s}")
-       
-        plt.close('all')
+            except Exception as e:
+                logger.error(f"could not save image of {input_name:s} cluster result : {e:s}")
+
+        if plot or save_plot:
+            plt.close('all')
 
 #%%
 if __name__ == '__main__':
