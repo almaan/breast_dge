@@ -28,21 +28,20 @@ Three parameters are used for cluster generation:
     min_spots       - the number of neihbours a spot must have to be considered an inner point of the cluster
     min_total_spots - the minimum number of spots that a cohort of spots must have to be considered a tumor
 
-<h2>Installation</h2>
-1. Clone repo
-´´´
+# Installation
+## 1. Clone repo
+´´´bash
 cd /install_directory
 git clone https://github.com/almaan/breast_dge.git
 ´´´
-2. Install (makes a soft link)
-´´´
+## 2. Install (makes a soft link)
+´´´bash
 cd /scripts/tumor_extraction
 chmod +x install.sh
 sudo install.sh
 
-´´´
-
-3. Run
+´´´bash
+## 3. Run
 ´´´
 ST_feature_extract --input /Annotated_File_Dir/single_file --output result_of_single_file.tsv --min_spot 2 --max_dist 3 --min_total_spots 5 --save_plot
 ´´´
