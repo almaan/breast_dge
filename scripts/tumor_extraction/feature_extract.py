@@ -6,7 +6,7 @@ Created on Tue Nov 20 09:28:23 2018
 
 @author: Alma Anderssson
 
-Program to identify isolated regions (such as tumors) from annotated ST-data. Clusters of spatially coherent
+Script to identify isolated regions (such as tumors) from annotated ST-data. Clusters of spatially coherent
 and isolated spots will be marked accordingly to cluster index. The number of clusters
 within the sample does not have to be prespecified (and cannot be either).
 
