@@ -59,9 +59,6 @@ import datetime
 
 plt.style.use('ggplot')
 
-#TODO : Add docstrings to functions
-#TODO : Add logger througout procedure
-
 
 def _load_file(filename):
     """
@@ -194,24 +191,6 @@ def label_to_feature_id(idx_list,
     
     return feature_labels
 
-#def plot_section(dataframe):
-#    """
-#    
-#    """
-#    x_coord = dataframe['xcoord'].values.reshape(-1,1)
-#    y_coord = dataframe['ycoord'].values.reshape(-1,1)
-#    cmap = dict(tumor = 'red', non = 'green')
-#    fig, ax = plt.subplots(1,1)
-#    
-#    for idx in ['tumor','non']:
-#        pos = (dataframe['tumor'] == idx)
-#        ax.scatter(x_coord[pos],
-#                   y_coord[pos],
-#                   c = cmap[idx],
-#                   marker = 'o',
-#                   )
-#    
-#    fig.show()
 
 def configure_logger(logger, log_name):
         """
@@ -611,11 +590,8 @@ def main(input_name,
         if plot or save_plot:
             plt.close('all')
 
-#%%
 if __name__ == '__main__':
 
-# TODO : Add help information to all arguments
-    
     
     prs = arp.ArgumentParser()
 
