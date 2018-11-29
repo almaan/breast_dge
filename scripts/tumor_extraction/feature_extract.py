@@ -25,7 +25,7 @@ working directory. For single file mode enter a file name as output.
 Each file to be processed must have the sample name specified somewhere within the file according to the pattern
 "XY#####" where X and Y are arbitrary alphabetical characters within the range [A-Z] (upper or lowercase) and "#"
 represents a digit in the range[0-9]. The x-coordinates and y-coordinates should be given in columns named "xcoord"
-and "ycoords" respectively. The column containing the annotated feature can be named arbitrarily (default is "tumor"),
+and "ycoord" respectively. The column containing the annotated feature can be named arbitrarily (default is "tumor"),
 and should be passed as an argument (feature) if not "tumor". The annotation of interest (only support) for one as of now
 should be passed as an argument if other than default ("tumor".)
 
@@ -84,8 +84,8 @@ def main(input_name,
         
         for (num,single_file) in enumerate(all_files):
             try:
+                print(get_sample_name(single_file))
                 df = load_file(osp.join(input_name, single_file))
-                
                 labels = extractFeatures(df, 
                                          minSpt= min_spot,
                                          maxDist = max_dist,
@@ -93,7 +93,6 @@ def main(input_name,
                                          feature = feature,
                                          select_for = select_for,
                                          )
-                
                 feature_labels = label_to_feature_id(labels)
                 
                 df['feature_id'] = feature_labels
@@ -111,7 +110,7 @@ def main(input_name,
                 
                 logger.info(f"successfully processed file {single_file:s}")
             except Exception as e:
-                logger.error(f"could not process file {single_file:s} : {e:s}")
+                logger.error(f"could not process file {single_file:s} : {e}")
             
             if plot:
                 try:
@@ -123,7 +122,7 @@ def main(input_name,
                                                       )
                     plt.show()
                 except Exception as e:
-                    logger.error(f"could not plot cluster result of {single_file:s} : {e:s}")
+                    logger.error(f"could not plot cluster result of {single_file:s} : {e}")
             
             if save_plot:
                 try:
@@ -140,7 +139,7 @@ def main(input_name,
                     fig.savefig(img_output)
                     logger.info(f"successfully saved image of {single_file:s} clustering at : {img_output:s}")
                 except Exception as e:
-                    logger.error(f"could not save image of {single_file:s} : {e:s}")
+                    logger.error(f"could not save image of {single_file:s} : {e}")
                     
                     
                 
@@ -180,7 +179,7 @@ def main(input_name,
                                                   )
                 plt.show()
             except Exception as e:
-                logger.info(f"could not generate plot : {e:s}")
+                logger.info(f"could not generate plot : {e}")
             
         if save_plot:
             try:
@@ -202,7 +201,7 @@ def main(input_name,
                 logger.info(f"successfully saved image of {input_name:s} at : {img_output:s}")
         
             except Exception as e:
-                logger.error(f"could not save image of {input_name:s} cluster result : {e:s}")
+                logger.error(f"could not save image of {input_name:s} cluster result : {e}")
 
         if plot or save_plot:
             plt.close('all')
@@ -303,7 +302,6 @@ if __name__ == '__main__':
     
     args = prs.parse_args()
     
-        
     configure_logger(logger, log_name = args.logname)
     log_header(logger)
     

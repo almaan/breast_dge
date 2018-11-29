@@ -23,7 +23,8 @@ def load_file(filename):
                      sep = '\t',
                      index_col = 0,
                      )
-    df.columns = ['xcoord'] + df.columns.tolist()[0:-1]
+    
+#    df.columns = ['xcoord'] + df.columns.tolist()[0:-1]
     return df
 
 
@@ -37,8 +38,13 @@ def get_sample_name(filename):
     a number between 0-9.
     
     """
+    
     pattern = '[A-Z]{2}\d{5}[_][A-Z]\d'
-    return re.search(pattern, filename.upper())[0]
+    res = re.search(pattern, filename.upper())[0]
+    if len(res) == 0:
+        pattern = '[A-Z]{2}\d{5}'
+        res = re.search(pattern.filename.upper())[0]
+    return  res
 
     
 def get_coordinates(df):
