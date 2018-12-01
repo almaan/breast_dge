@@ -1,205 +1,115 @@
-suppressPackageStartupMessages(library("dplyr"))
-suppressPackageStartupMessages(library("DESeq2"))
-suppressPackageStartupMessages(library("scran"))
+library(SummarizedExperiment)
+library(DESeq2)
+library(ggplot2)
+library(scran)
+library(stringr)
+library(optparse)
+library(dplyr)
 
-suppressPackageStartupMessages(library("docstring"))
-suppressPackageStartupMessages(library("optparse"))
-suppressPackageStartupMessages(library("futile.logger"))
-
-system("git describe --tags")
-
-extract_names <- function(string){
-  #' Extracts sample id and replicate provided
-  #' the count_data-ID_replicate.tsv filename
-  
-  sample_name <- strsplit(strsplit(string,'-')[[1]][2],'[.]')
-  return(sample_name[[1]][1])
+load_matrix <- function(main_pth, file_name, nrows = -1){
+  mat <- read.csv(paste(c(main_pth,file_name),collapse="/"), sep = "\t", nrows = nrows, header = TRUE, row.names = 1)
+  return(mat)
+}
+load_features <- function(main_pth,file_name) {
+  feat <- read.csv(paste(c(main_pth,file_name),collapse="/"), sep = "\t",
+                   header = TRUE, row.names = 1, stringsAsFactors = TRUE)
+  return(feat)
 }
 
-merge_matrices <- function(M1,M2, na_fill = 0.0){
-  #' merge two matrices inplace
-  #' will expand matrix M1 as to include the union of columns from M1 and M2
-  #' All unaccounted genes (not present in a matrix) will be
-  #' assigned a value specified by the user
-  #' 
-  #' Input: 
-  #'    - M1 : matrix with that rows of M2 will be vertical appended to
-  #'    - M2 : matrix that is appended to M1 (vertically)
-  #'    - na_fill : value to fill unspecified counts with. 0.0 is default
-  #'    
-  #' Output: 
-  #'    - M1 : concatenated matrix
-  
-  r1_names <- rownames(M1)
-  r2_names <- rownames(M2)
-  
-  M1 <- bind_rows(M1,M2)
-  rownames(M1) <- c(r1_names,r2_names)
-  M1[is.na(M1)] = na_fill
-  return(M1)
+get_id <- function(path) {
+  return(str_extract(path,pattern = "\\d{4,5}_\\w{2}"))
+}
+
+clean_matrix <- function(mat, min_spot = 100, min_gene = 0.05){
+  keep_genes <- colMeans(mat !=0) >= min_gene
+  keep_spots <- rowSums(mat) >= min_spot
+  mat <- mat[keep_spots,keep_genes]
+  return(mat)
 }
 
 
-prepare_counts <-function(main_pth,single_sample, lower_bound = 0){
-  #'Load and format the count-matrix of a .tsv file
-  #'Input file must have genes as columns and spots as rows
-  #'Will remove all spots with a total count less than lower_bound
-  #'If a specific gene-list is provided by the user, only these
-  #'genes will be read, else all union of genes found in all samples will
-  #'be read.
-  #'
-  #'Input : 
-  #'   - main_pth : directory where .tsv count matrix files are located
-  #'   - single_sample : file-name of count matrix. Format spots x genes
-  #'   - lower_bound : lower bound of total count of a spot. Default 0
-  #'   
-  #'Output : 
-  #'   - tcnt : count matrix dataframe with spots as rows, genes as columns 
+generate_matrices <- function(count_pth,feature_pth,select_for ){
+  pattern_cnt <- "count.*tsv"
+  pattern_fea <-"*tsv"
+  count_files <- sort(list.files(count_pth,pattern = pattern_cnt))
   
-  full_pth <- paste(main_pth,single_sample,sep = "/")
-  sample_name <- extract_names(single_sample)
-  
-  flog.info(paste(c('Including', sample_name, "into count matrix"), collapse = " "))
-  
-  if (!typeof(SELECTED_GENES) == "logical"){
-    
-    header <- unlist(strsplit(readLines(file(full_pth), n = 1),'\t'))
-    close(file(full_pth))
-    
-    gene_names <- which(header %in% SELECTED_GENES)
-    colclass <- replicate(length(header), NULL)
-    colclass[gene_names] <- NA
-    colclass[1] <- NA
-    
-    remove(header)
-  } 
-  
-  tcnt <- as.data.frame(read.csv(full_pth,
-                                   sep = '\t',
-                                   header = TRUE,
-                                   colClasses = colclass,
-                                   row.names = 1,
-                                   ))
-  
-  rownames(tcnt) <- sapply(rownames(tcnt), function(x) paste(sample_name,x, sep = '_'))
-  
-  prior_n_spots <- dim(tcnt)[1]
-  tcnt <- tcnt[rowSums(tcnt) > lower_bound,]
-  post_n_spots <- dim(tcnt)[1]
-  
-  flog.info(paste(c("A total of", 
-                    prior_n_spots - post_n_spots,
-                    "/",
-                    prior_n_spots,
-                    "spots were removed",
-                    "due to low counts"),
-                  collapse = " ")
-            )
-  
-  return(tcnt)
-}
-
-prepare_coldata <- function(feature_file_dir,single_sample) {
-  #' Prepare coldata dataframe for DESeq2
-  #' 
-  #'  Input : 
-  #'    - feature_file_dir : directory of feature_file_dir specified for sample
-  #'    - single_sample : file-name of sample to be loaded
-  #'     
-  #'  Output : 
-  #'     - cdata : colData data-frame to be used in DESeq2
-  
-  sample_name <- extract_names(single_sample)
-  flog.info(paste(c('Including', sample_name, "into feature matrix"), collapse = " "))
-  
-  patient_id <- unlist(strsplit(sample_name,'_'))[1]
-  replicate <- unlist(strsplit(sample_name,'_'))[2]
-  
-  full_pth <- paste(paste(feature_file_dir, paste('feature_data',sample_name,sep='-'), sep = '/'),'tsv', sep = '.')
-  
-  cdata <- as.data.frame(read.csv(full_pth, sep = '\t', header = TRUE))
-  cdata['id'] <- patient_id
-  cdata['replicate'] <- replicate
-  
-  stem_name <- apply(cdata[c("x_coord","y_coord")], 1, paste, collapse = "x")
-  rownames(cdata) <- sapply(stem_name, function(x) paste(sample_name,x,sep='_'))
-
-  return(cdata)
-}
-
-
-main <- function() {
-  
-  count_file_names <- sort(list.files(COUNT_DATA_DIR, pattern = '*count*'))
-  
-  for (num in 1:length(count_file_names)) {
-    if (num == 1) {
-      
-      cnt <- prepare_counts(COUNT_DATA_DIR,
-                            count_file_names[num])
-      
-      coldata <- prepare_coldata(FEATURE_FILE_DIR,
-                                 count_file_names[num])
-      
-    } else {
-      cnt <- merge_matrices(cnt,
-                            prepare_counts(COUNT_DATA_DIR,
-                            count_file_names[num]))
-      
-      coldata <- merge_matrices(coldata, 
-                                prepare_coldata(FEATURE_FILE_DIR,
-                                count_file_names[num]))
-    }
-  } 
-  
-  
-  flog.info("Initate Size Factor Estimation using scran")
-  
-  scran_size_factors <- computeSumFactors(as.matrix(t(cnt)), positive = TRUE)
-  
-  flog.info("Size Factors Computed Using scran")
-  
-  # TODO : Look into how to remedy this ugly shit
-  
-  keep_spots <- (scran_size_factors > 0.0)
-  scran_size_factors <- scran_size_factors[keep_spots]
-  cnt <- cnt[keep_spots,]
-  
-  coldata <- coldata[rownames(cnt),]
-  
-  if (sum(rownames(coldata) != rownames(cnt)) == 0) {
-    flog.info("Features are coherent with Count Matrix")
-  } else {
-    flog.error("Features are not coherent with Count Matrix")
-    quit("no",0)
+  if (!is.null(select_for)) {
+    selected_samples <- readLines(file(select_for,"r"))
+    selected_samples <- selected_samples[sapply(selected_samples, function(x) x != "")]
+    unlink(select_for)
+    count_files <- count_files[sapply(count_files, function(x) get_id(x) %in% selected_samples)]
   }
   
+  feature_files <- list.files(feature_pth, pattern = pattern_fea)
+  count_matrix <- data.frame()
+  feature_matrix <- data.frame()
   
-  dds <- DESeqDataSetFromMatrix(countData = t(cnt),
-                                colData = coldata,
-                                design = design)
   
-  flog.info("DESeq2 Matrix generated")
+  for(k in c(1:length(count_files))) {
+    cmat <- load_matrix(count_pth,count_files[k])
+    tag <- get_id(count_files[k])
+    
+    fmat_name <- grep(paste(c(".*",tag,".*"),collapse = ""),feature_files)
+    fmat <- load_features(feature_pth,feature_files[fmat_name])
+    inter <- intersect(rownames(fmat),rownames(cmat))
+    fmat <-fmat[inter,]
+    fmat[c('patient','replicate')] <- unlist(strsplit(tag,'_'))
+    cmat <- cmat[inter,]
+    count_matrix <- bind_rows(count_matrix,cmat)
+    feature_matrix <- bind_rows(feature_matrix,fmat)
+  }
   
-  sizeFactors(dds) <- scran_size_factors
+  rownames(count_matrix) <- c(1:dim(count_matrix)[1])
+  rownames(feature_matrix) <- c(1:dim(feature_matrix)[1])
   
-  flog.info("Transfered size factors from scran to DESeq2")  
+  feature_matrix<-feature_matrix[rownames(count_matrix),]
   
-  dds <- DESeq(dds, 
-              parallel = TRUE,
-              BPPARAM = bpparam("SnowParam"),
-              )
+    
+  count_matrix[is.na(count_matrix)] <- 0
+  count_matrix <- clean_matrix(count_matrix)
+  count_matrix <-t(count_matrix)
   
-  flog.info("DESeq estimation successfull")
-  
-  res <-results(dds)
-  res <- results(dds,contrast=c("f1","tumor","non-tumor"))
-  
+  return(list(count_matrix = count_matrix, feature_matrix = feature_matrix))
+}
 
-  print(res)
+
+DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
+ 
+  scran_size_factors <- computeSumFactors(count_matrix, positive = TRUE)
+  se <- SummarizedExperiment(assays = count_matrix, colData = feature_matrix)
+  remove(count_matrix)
+  remove(feature_matrix)
+  
+  dds <- DESeqDataSet(se, design = design_formula)
+  sizeFactors(dds) <- scran_size_factors
+  dds$tumor <- relevel(dds$tumor, "tumor")
+  dds<-DESeq(dds, 
+             #parallel = TRUE,
+             #BPPARAM = bpparam("SnowParam")
+             )
+  return(dds)
+}
+
+main <- function(count_input_dir,
+                 feature_input_dir,
+                 select_for,
+                 output_dir,
+                 design_file){
+  
+  design_formula <- as.formula(readLines(file(design_file,"r")))
+  close(file(design_file))
+  
+  matrices <- generate_matrices(count_pth = count_input_dir, feature_pth = feature_input_dir,select_for)
+  dds <- DESeq_pipline(matrices$count_matrix, matrices$feature_matrix, design_formula = design_formula)
+  res <- results(dds)
+  write.csv(as.data.frame(res), file = paste(c(output_dir,"DGE_analysis_result.tsv"), collapse = "/"), sep = "\t")
+ 
      
 }
 
+snowparam <- SnowParam(workers = 4, type = "SOCK")
+register(snowparam, default = TRUE)
+registered()
 
 parser <- OptionParser()
 parser <- add_option(parser,
@@ -208,45 +118,49 @@ parser <- add_option(parser,
                                     "matrix name should be on form",
                                     '"count_data-ID_Replicate.tsv"'),
                                   collapse = " "),
-                    )
+)
 
 
 parser <- add_option(parser,
-                    c("-o", "--output_dir"),
-                    default = getwd(),
-                    type = "character",
-                    help = paste(c("directory to save output into.",
-                                   "if none specified cwd will be used."),
-                                 collapse = " "),
-                    
-                    )
+                     c("-o", "--output_dir"),
+                     default = getwd(),
+                     type = "character",
+                     help = paste(c("directory to save output into.",
+                                    "if none specified cwd will be used."),
+                                  collapse = " "))
 
 parser <- add_option(parser,
                      c("-f","--feature_dir"),
                      help = paste(c("directory of feature-files.",
                                     "file name should be on form",
                                     '"count_data-ID_Replicate.tsv"'),
-                                  collapse = " "),
-                      )
+                                  collapse = " "))
+
+parser <- add_option(parser,
+                     c("-s", "--select_for"),
+                     default = NULL,
+                     type = "character",
+                     help = paste(c("file containing the sample ids.",
+                                    "for those samples to be studied in",
+                                    "the analysis"),
+                                  collapse = " "))
+
+#TODO - allow for selection of specific genes
+#parser <- add_option(parser,
+#                     c("-g", "--gene_file"),
+#                     default =  NULL,
+#                     help = paste(c("list of genes to be included in DGE analysis.",
+#                                    "each row shall contain name of gene.",
+#                                    'if no list provided all genes will be used.'),
+#                                  collapse = " "))
 
 
 parser <- add_option(parser,
-                     c("-g", "--gene_file"),
-                     default =  NULL,
-                     help = paste(c("list of genes to be included in DGE analysis.",
-                                    "each row shall contain name of gene.",
-                                    'if no list provided all genes will be used.'),
-                                  collapse = " "),
-                     )
-
-
-parser <- add_option(parser,
-                     c("-d", "--design"),
+                     c("-d", "--design_file"),
                      help = paste(c("design file to be used in DGE-analysis.",
                                     "explictily states what features from the",
                                     "feature files that should be used."),
-                                  collapse = " "),
-                      )
+                                  collapse = " "))
 
 parser <- add_option(parser,
                      c("-w", "--workers"),
@@ -260,48 +174,10 @@ parser <- add_option(parser,
 
 args <- parse_args(parser)
 
-source(args$design)
-
-if (!exists(x = "design")) {
-  print("Please provide a proper design-file")
-  print("Exiting")
-  quit(0,status = 0)
-}
+main(count_input_dir = args$count_dir,
+     feature_input_dir = args$feature_dir,
+     design_file = args$design_file,
+     output_dir =args$design_file,
+     select_for = args$select_for)
 
 
-#TODO : Consider whether default option for design should be includeded.
-
-if (!interactive()) {
-  
-  COUNT_DATA_DIR <<- args$count_dir
-  FEATURE_FILE_DIR <<- args$feature_dir
-  OUTPUT_DIR <<- args$output_dir
-  
-  snowparam <- SnowParam(workers = args$workers, type = "SOCK")
-  register(snowparam, default = TRUE)
-  registered()
-  
-  
-  flog.info(paste(c(args$workers, "cores are being used for computation"), collapse = " "))
-    
-  flog.threshold(DEBUG)
-  #TODO : Consider if STDOUT or log-file should be used
-  #flog.appender(appender.file(paste(getwd(),'test_evaluate.logger',sep='/')))
-  
-    
-  if (! typeof(args$gene_file) == "logical") {
-    
-    SELECTED_GENES <<- read.csv(args$gene_file, header = FALSE)[,1]
-    flog.info(paste(c("Using the genes specified in file", args$gene_file), collapse = " "))
-  } else {
-    SELECTED_GENES <<- FALSE
-    flog.info("Using union of all genes.")
-  }
-  
-  main()
-
-} else {
-  
-  print("Run via terminal for proper activation.")
-  
-}
