@@ -60,6 +60,7 @@ from funcs.utils import *
 from clustering.cluster import *
 from clustering.visual import *
 
+
 def main(input_name,
          output_name,
          plot,
@@ -84,8 +85,8 @@ def main(input_name,
         
         for (num,single_file) in enumerate(all_files):
             try:
-                print(get_sample_name(single_file))
                 df = load_file(osp.join(input_name, single_file))
+                df.index = match_rownames(df,get_sample_name(single_file))
                 labels = extractFeatures(df, 
                                          minSpt= min_spot,
                                          maxDist = max_dist,
@@ -96,6 +97,7 @@ def main(input_name,
                 feature_labels = label_to_feature_id(labels)
                 
                 df['feature_id'] = feature_labels
+                
                 
                 if not osp.isdir(output_name):
                     os.mkdir(osp.join(os.getcwd(),output_name))
@@ -148,6 +150,8 @@ def main(input_name,
     elif osp.isfile(input_name):
         logger.info(f"reading file from {input_name:s} : SINGLE FILE MODE")
         df = load_file(input_name)
+        df.index = match_rownames(df,get_sample_name(single_file))
+
         
         labels = extractFeatures(df, 
                                  minSpt= min_spot,

@@ -15,16 +15,23 @@ import re
 from scipy.spatial.distance import cityblock as l1
 
 
+def match_rownames(data,sample_id):
+    idx = np.apply_along_axis(func1d = lambda x: '_'.join([sample_id,'x'.join([str(int(round(x[0],0))),str(int(round(x[1],0)))])]),
+                              axis = 1,
+                              arr = data[['xcoord','ycoord']].values)
+    return idx
+
 def load_file(filename):
     """
     Function to load tumor file specified according to the predefined format
     """
-    df = pd.read_csv(filename,
-                     sep = '\t',
-                     index_col = 0,
-                     )
-    
-#    df.columns = ['xcoord'] + df.columns.tolist()[0:-1]
+    try:
+        df = pd.read_csv(filename,
+                         sep = '\t',
+                         index_col = 0,
+                         )
+    except Exception as e:
+        logger.error(f'Could not load file : {e}')        
     return df
 
 
