@@ -6,6 +6,8 @@ library(stringr)
 library(optparse)
 library(dplyr)
 
+source("/home/alma/ST-2018/CNNp/DGE/scripts/DGE_analysis/poolf.r")
+
 load_matrix <- function(main_pth, file_name, nrows = -1){
   mat <- read.csv(paste(c(main_pth,file_name),collapse="/"), sep = "\t", nrows = nrows, header = TRUE, row.names = 1)
   return(mat)
@@ -28,7 +30,7 @@ clean_matrix <- function(mat, min_spot = 100, min_gene = 0.05){
 }
 
 
-generate_matrices <- function(count_pth,feature_pth,select_for ){
+generate_matrices <- function(count_pth,feature_pth,select_for, feature_name ){
   pattern_cnt <- "count.*tsv"
   pattern_fea <-"*tsv"
   count_files <- sort(list.files(count_pth,pattern = pattern_cnt))
@@ -53,20 +55,29 @@ generate_matrices <- function(count_pth,feature_pth,select_for ){
     fmat <- load_features(feature_pth,feature_files[fmat_name])
     inter <- intersect(rownames(fmat),rownames(cmat))
     fmat <-fmat[inter,]
-    fmat[c('patient','replicate')] <- unlist(strsplit(tag,'_'))
     cmat <- cmat[inter,]
+    
+    matl <- make_pseudo(cmat,fmat,select = feature_name, lim = 2, 
+                        k_neighbors = 8,
+                        n_samples = 20)
+    
+    cmat <- matl$pseudo_cnt
+    fmat <- matl$pseudo_feat
+    
+        
+    fmat['patient'] <- unlist(strsplit(tag,'_'))[1]
+    fmat['replicate'] <- unlist(strsplit(tag,'_'))[2]
+    
     count_matrix <- bind_rows(count_matrix,cmat)
     feature_matrix <- bind_rows(feature_matrix,fmat)
   }
-  
   rownames(count_matrix) <- c(1:dim(count_matrix)[1])
   rownames(feature_matrix) <- c(1:dim(feature_matrix)[1])
-  
-  feature_matrix<-feature_matrix[rownames(count_matrix),]
-  
     
   count_matrix[is.na(count_matrix)] <- 0
-  count_matrix <- clean_matrix(count_matrix)
+  #count_matrix <- clean_matrix(count_matrix)
+  
+  feature_matrix<-feature_matrix[rownames(count_matrix),]
   count_matrix <-t(count_matrix)
   
   return(list(count_matrix = count_matrix, feature_matrix = feature_matrix))
@@ -94,22 +105,23 @@ main <- function(count_input_dir,
                  feature_input_dir,
                  select_for,
                  output_dir,
-                 design_file){
+                 design_file,
+                 feature_name){
   
   design_formula <- as.formula(readLines(file(design_file,"r")))
   close(file(design_file))
   
-  matrices <- generate_matrices(count_pth = count_input_dir, feature_pth = feature_input_dir,select_for)
+  matrices <- generate_matrices(count_pth = count_input_dir, feature_pth = feature_input_dir,select_for,feature_name)
   dds <- DESeq_pipline(matrices$count_matrix, matrices$feature_matrix, design_formula = design_formula)
   res <- results(dds)
-  write.csv(as.data.frame(res), file = paste(c(output_dir,"DGE_analysis_result.tsv"), collapse = "/"), sep = "\t")
+  write.csv(as.data.frame(res), file = paste(c(output_dir,"DGE_analysis_result.csv"), collapse = "/"))
  
      
 }
 
-snowparam <- SnowParam(workers = 4, type = "SOCK")
-register(snowparam, default = TRUE)
-registered()
+#snowparam <- SnowParam(workers = 4, type = "SOCK")
+#register(snowparam, default = TRUE)
+#registered()
 
 parser <- OptionParser()
 parser <- add_option(parser,
@@ -117,8 +129,7 @@ parser <- add_option(parser,
                      help = paste(c("directory of count-matrices.",
                                     "matrix name should be on form",
                                     '"count_data-ID_Replicate.tsv"'),
-                                  collapse = " "),
-)
+                                  collapse = " "))
 
 
 parser <- add_option(parser,
@@ -163,6 +174,14 @@ parser <- add_option(parser,
                                   collapse = " "))
 
 parser <- add_option(parser,
+                     c("-fn", "--feature_name"),
+                     default = "tumor",
+                     help = paste(c("name of feature that will be studied.",
+                                    "should be equivalent to column name in",
+                                    "feature file."),
+                                  collapse = " "))
+
+parser <- add_option(parser,
                      c("-w", "--workers"),
                      help = paste(c("number of cores/workers to be used.",
                                     "if non given half of maximum will be used.",
@@ -177,7 +196,8 @@ args <- parse_args(parser)
 main(count_input_dir = args$count_dir,
      feature_input_dir = args$feature_dir,
      design_file = args$design_file,
-     output_dir =args$design_file,
-     select_for = args$select_for)
+     output_dir =args$output_dir,
+     select_for = args$select_for,
+     feature_name = args$feature_name)
 
 
