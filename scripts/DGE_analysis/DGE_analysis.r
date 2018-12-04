@@ -1,12 +1,15 @@
-library(SummarizedExperiment)
-library(DESeq2)
-library(ggplot2)
-library(scran)
-library(stringr)
-library(optparse)
-library(dplyr)
+sh <- suppressPackageStartupMessages
 
-source("/home/alma/ST-2018/CNNp/DGE/scripts/DGE_analysis/poolf.r")
+sh(library(SummarizedExperiment))
+sh(library(DESeq2))
+sh(library(ggplot2))
+sh(library(scran))
+sh(library(stringr))
+sh(library(optparse))
+sh(library(dplyr))
+sh(library(futile.logger))
+source(paste(c(getwd(),"lib/parser.r"),collapse = "/"))
+source(paste(c(getwd(),"lib/poolf.r"), collapse = "/"))
 
 load_matrix <- function(main_pth, file_name, nrows = -1){
   mat <- read.csv(paste(c(main_pth,file_name),collapse="/"), sep = "\t", nrows = nrows, header = TRUE, row.names = 1)
@@ -22,25 +25,56 @@ get_id <- function(path) {
   return(str_extract(path,pattern = "\\d{4,5}_\\w{2}"))
 }
 
-clean_matrix <- function(mat, min_spot = 100, min_gene = 0.05){
+clean_matrix <- function(mat, min_spot = 100, min_gene = 0.05, remove_ambigious){
   keep_genes <- colMeans(mat !=0) >= min_gene
   keep_spots <- rowSums(mat) >= min_spot
   mat <- mat[keep_spots,keep_genes]
+  if (remove_ambigious){
+    n_before <- dim(mat)[2]
+    mat <-mat[,!grepl('ambiguous',colnames(mat))]
+    n_after <- dim(mat)[2]
+    flog.info(sprintf("Removed %d genes out of %d total", (n_before-n_after), n_before))
+  }
   return(mat)
 }
 
+#redunant currently, but if more advanced functions shouls be added
+#could potentially show useful
+#read_gene_file <- function(pth){
+#  gene_names <- read.table(pth, header= FALSE, sep = "\n")
+#  return(gene_names)
+#}
 
-generate_matrices <- function(count_pth,feature_pth,select_for, feature_name ){
+generate_matrices <- function(count_pth,
+                              feature_pth,
+                              select_for,
+                              feature_name,
+                              k_neighbours,
+                              n_samples,
+                              max_dist,
+                              gene_file,
+                              remove_ambigious){
+  
   pattern_cnt <- "count.*tsv"
   pattern_fea <-"*tsv"
   count_files <- sort(list.files(count_pth,pattern = pattern_cnt))
   
+  if (max_dist < 0) {
+    max_dist <- Inf
+  }
+  
+  if (!is.null(gene_file)){
+    gene_names <- read.table(gene_file, sep = "\n", header = FALSE)
+  }
+  
   if (!is.null(select_for)) {
     selected_samples <- readLines(file(select_for,"r"))
     selected_samples <- selected_samples[sapply(selected_samples, function(x) x != "")]
-    unlink(select_for)
-    count_files <- count_files[sapply(count_files, function(x) get_id(x) %in% selected_samples)]
+    count_files <- count_files[sapply(count_files, function(x) any(sapply(selected_samples, function (y) grepl(y,x))))]
+    
   }
+  
+  flog.info(sprintf("A total of %d sections with unique ID's will be used", length(count_files)))
   
   feature_files <- list.files(feature_pth, pattern = pattern_fea)
   count_matrix <- data.frame()
@@ -51,15 +85,20 @@ generate_matrices <- function(count_pth,feature_pth,select_for, feature_name ){
     cmat <- load_matrix(count_pth,count_files[k])
     tag <- get_id(count_files[k])
     
+    if (!is.null(gene_file)){
+      select_gene <- intersect(gene_names, colnames(cmat)) 
+      cmat <- cmat[,gene_names]
+    }
+    
     fmat_name <- grep(paste(c(".*",tag,".*"),collapse = ""),feature_files)
     fmat <- load_features(feature_pth,feature_files[fmat_name])
     inter <- intersect(rownames(fmat),rownames(cmat))
     fmat <-fmat[inter,]
     cmat <- cmat[inter,]
     
-    matl <- make_pseudo(cmat,fmat,select = feature_name, lim = 2, 
-                        k_neighbors = 8,
-                        n_samples = 20)
+    matl <- make_pseudo(cmat,fmat,select = feature_name, lim = max_dist, 
+                        k_neighbors = k_neighbours,
+                        n_samples = n_samples)
     
     cmat <- matl$pseudo_cnt
     fmat <- matl$pseudo_feat
@@ -75,7 +114,7 @@ generate_matrices <- function(count_pth,feature_pth,select_for, feature_name ){
   rownames(feature_matrix) <- c(1:dim(feature_matrix)[1])
     
   count_matrix[is.na(count_matrix)] <- 0
-  #count_matrix <- clean_matrix(count_matrix)
+  count_matrix <- clean_matrix(count_matrix, remove_ambigious = remove_ambigious)
   
   feature_matrix<-feature_matrix[rownames(count_matrix),]
   count_matrix <-t(count_matrix)
@@ -106,15 +145,31 @@ main <- function(count_input_dir,
                  select_for,
                  output_dir,
                  design_file,
-                 feature_name){
+                 feature_name,
+                 k_neighbours,
+                 n_samples,
+                 max_dist,
+                 gene_file,
+                 remove_ambigious){
   
-  design_formula <- as.formula(readLines(file(design_file,"r")))
+  design_formula <- readLines(file(design_file,"r"))
+  design_formula <- as.formula(design_formula[!grepl('#',design_formula)])
+  flog.info(paste(c("Using design : ", design_formula ),collapse = " "))
   close(file(design_file))
   
-  matrices <- generate_matrices(count_pth = count_input_dir, feature_pth = feature_input_dir,select_for,feature_name)
+  matrices <- generate_matrices(count_pth = count_input_dir,
+                                feature_pth = feature_input_dir,
+                                select_for = select_for,
+                                feature_name = feature_name,
+                                k_neighbours = k_neighbours,
+                                n_samples = n_samples,
+                                max_dist = max_dist,
+                                gene_file = gene_file,
+                                remove_ambigious = remove_ambigious)
+  
   dds <- DESeq_pipline(matrices$count_matrix, matrices$feature_matrix, design_formula = design_formula)
   res <- results(dds)
-  write.csv(as.data.frame(res), file = paste(c(output_dir,"DGE_analysis_result.csv"), collapse = "/"))
+  write.csv(as.data.frame(res), file = paste(c(output_dir), collapse = "/"))
  
      
 }
@@ -124,80 +179,24 @@ main <- function(count_input_dir,
 #registered()
 
 parser <- OptionParser()
-parser <- add_option(parser,
-                     c("-i","--count_dir"),
-                     help = paste(c("directory of count-matrices.",
-                                    "matrix name should be on form",
-                                    '"count_data-ID_Replicate.tsv"'),
-                                  collapse = " "))
-
-
-parser <- add_option(parser,
-                     c("-o", "--output_dir"),
-                     default = getwd(),
-                     type = "character",
-                     help = paste(c("directory to save output into.",
-                                    "if none specified cwd will be used."),
-                                  collapse = " "))
-
-parser <- add_option(parser,
-                     c("-f","--feature_dir"),
-                     help = paste(c("directory of feature-files.",
-                                    "file name should be on form",
-                                    '"count_data-ID_Replicate.tsv"'),
-                                  collapse = " "))
-
-parser <- add_option(parser,
-                     c("-s", "--select_for"),
-                     default = NULL,
-                     type = "character",
-                     help = paste(c("file containing the sample ids.",
-                                    "for those samples to be studied in",
-                                    "the analysis"),
-                                  collapse = " "))
-
-#TODO - allow for selection of specific genes
-#parser <- add_option(parser,
-#                     c("-g", "--gene_file"),
-#                     default =  NULL,
-#                     help = paste(c("list of genes to be included in DGE analysis.",
-#                                    "each row shall contain name of gene.",
-#                                    'if no list provided all genes will be used.'),
-#                                  collapse = " "))
-
-
-parser <- add_option(parser,
-                     c("-d", "--design_file"),
-                     help = paste(c("design file to be used in DGE-analysis.",
-                                    "explictily states what features from the",
-                                    "feature files that should be used."),
-                                  collapse = " "))
-
-parser <- add_option(parser,
-                     c("-fn", "--feature_name"),
-                     default = "tumor",
-                     help = paste(c("name of feature that will be studied.",
-                                    "should be equivalent to column name in",
-                                    "feature file."),
-                                  collapse = " "))
-
-parser <- add_option(parser,
-                     c("-w", "--workers"),
-                     help = paste(c("number of cores/workers to be used.",
-                                    "if non given half of maximum will be used.",
-                                    "must be an integer"),
-                                  collapse = " "),
-                     type = "integer",
-                     default = floor(detectCores()/2)
-)
-
+parser <- make_parser(parser)
 args <- parse_args(parser)
+
+flog.threshold(DEBUG)
+flog.info("Starting DGE analysis")
+flog.info(sprintf("Will be using %d neighbors for sampling generating %d samples per section", 
+                  args$k_neighbours, args$n_samples))
 
 main(count_input_dir = args$count_dir,
      feature_input_dir = args$feature_dir,
      design_file = args$design_file,
      output_dir =args$output_dir,
      select_for = args$select_for,
-     feature_name = args$feature_name)
+     feature_name = args$feature_name,
+     gene_file = args$gene_file,
+     k_neighbours = args$k_neighbours,
+     n_samples = args$n_samples,
+     max_dist = args$max_dist,
+     remove_ambigious = args$remove_ambiguous)
 
 

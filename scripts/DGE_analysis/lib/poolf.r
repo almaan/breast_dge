@@ -1,10 +1,9 @@
 library(dbscan)
 #NOTE: Written as having the genes as rows and samples as columns
 get_idx <- function(data,
-                    #feat_col,
-                    #feat,
                     niter,
-                    k_neighbors, lim){
+                    k_neighbors,
+                    lim){
   
   idx_list <- matrix(0,nrow = niter, ncol = k_neighbors + 1 )
   nn <- kNN(as.matrix(data),
@@ -61,18 +60,14 @@ make_pseudo <- function(cnt, ft, select, k_neighbors,lim, n_samples, transpose =
   rownames(pseudo_mat) <- rownames(cnt)
   colnames(pseudo_mat) <-c(1:n_samples)
   pseudo_feat <-data.frame(0,row = n_samples, ncol = 1)
-  #pseudo_feat <-data.frame(unlist(sapply(1:length(features),
-   #                                      function(x)  replicate(ratio[x],features[x]))))
-  pseudo_feat <- data.frame(unlist(as.vector(sapply(1:2,function(x)  replicate(ratio[x],features[x])))))
+  pseudo_feat <- data.frame(unlist(as.vector(sapply(1:length(features),
+                            function(x)  replicate(ratio[x],features[x])))))
   
-  #identified problem, wrong index.
   colnames(pseudo_feat) <- select
   bot = 0
   for (jj in 1:length(features)){
     pos <-ft[select] == features[jj]
     idx <- get_idx(cbind(ft$xcoord[pos],ft$ycoord[pos]),
-                   #feat_col = select,
-                   #feat = features[jj],
                    niter = ratio[jj],
                    k_neighbors = k_neighbors,
                    lim = lim)
