@@ -50,24 +50,27 @@ def main(input_name,
          select_for,
          ):
 
-            
+    #if p_norm is negative set to infinity
+    p_norm = (np.inf if p_norm == -1 else p_norm)    
+        
     logger.info(f"reading file from {input_name:s}")
+    #load and prepare data
     df = load_file(input_name)
+    #generate rownames based on x and y coordinates, for downstream
     df.index = match_rownames(df,get_sample_name(input_name))
+    #get coordinates from feature file
     crd = get_coordinates(df)
     
-    feature_vector = df[feature].values
-    suffix = 'feature_separation'
-    p_norm = (np.inf if p_norm == -1 else p_norm)
-    
+    #get indices of isolated feature regions
     try:
         labels = connected_graphs_extraction(crd, 
                                              maxDist = max_dist,
                                              minFeature = min_total_spots,
-                                             feature_vector = feature_vector,
+                                             feature_vector = df[feature].values,
                                              select_for = select_for,
                                              p_norm = p_norm,
                                              )
+        
     except Exception as e:
         logger.error(f"Could not cluster sample. {e}")
         sys.exit(0)
@@ -76,14 +79,20 @@ def main(input_name,
     
     df['feature_id'] = feature_labels
     
+    #save results
+    suffix = 'feature_separation'
     if osp.isdir(output_name):
+        #if output is given as directory base output filename on sample-id and defined suffix 
         file_output = osp.join(output_name,'_'.join([get_sample_name(input_name), '.'.join([suffix,'tsv'])]))
     
     else:
-        file_output = osp.join('_'.join([get_sample_name(input_name), '.'.join([suffix,'tsv'])]))
-
+        #if output is given as a filename use this as name of output file use this
+        file_output = osp.join(output_name)
+    
+    #save result as modified feature-file using newly defined rownames and header
     df.to_csv(file_output, sep = '\t', header = True, index = True)
     
+    #if flag for interactinve plotting is included
     if plot:
         try:
             fig, ax = visualizeTumorSelection(df, 
@@ -95,7 +104,7 @@ def main(input_name,
             plt.show()
         except Exception as e:
             logger.info(f"could not generate plot : {e}")
-        
+    #if flag to save plot-result is included. Note how this does _not_ display the graph but only saves it    
     if save_plot:
         try:
             fig, ax = visualizeTumorSelection(df,
@@ -109,7 +118,7 @@ def main(input_name,
                 img_output = osp.join(output_name,
                                       '_'.join([get_sample_name(input_name), '.'.join([suffix,'png'])]))
             else:
-                img_output = osp.join('_'.join([get_sample_name(input_name), '.'.join([suffix,'png'])]))
+                img_output = osp.join('_'.join([output_name, '.'.join([suffix,'png'])]))
                 
             fig.savefig(img_output)
         
@@ -129,11 +138,10 @@ if __name__ == '__main__':
     prs.add_argument('-i','--input',
                      required = True,
                      type = str,
-                     help = ' '.join(['input file or directory. If single filename is',
-                                     'provided then all ".tsv" files within that directory',
-                                     'will be processed. Names of files must contain sample id',
-                                     'in format "XY#####" where X and Y are arbitrary alphabetic',
-                                     'characters and "#" are digits in the range [0-9]',
+                     help = ' '.join(['input file. Must have 5 digit patient id',
+                                      'in the name. If replicates are present in set',
+                                      'indicate this by appending an underscore and',
+                                      'replicate id to the patient id.',
                                      ]),
                      )
     
