@@ -2,21 +2,15 @@ Program to identify isolated regions (such as tumors) from annotated ST-data. Cl
 and isolated spots will be marked accordingly to cluster index. The number of clusters
 within the sample does not have to be prespecified (and cannot be either).
 
-Each cluster consists of two type of spots, inner spots and boundary spots. A spot is considered an inner spot
-if it has at least min_spot neighbours. An inner spot can "propagate" the cluster and will assign all of it's 
-neighbors to the same cluster as itself. Boundary spots belong to a tumor but has less than min_spot neighbors
-meaning that they cannot propagate a cluster. 
 
-An option to mask clusters below a given size (number of spots) is given, which can be specified with 
-the argument     .
+Files should be provided with a 4 or 5 digit patient id, if replicates are present then this should be indicated by
+appending an underscore followed by the replicate id (one capital letter followed by a digit).
 
-Input can be either a directory of multiple files to be processed simultaneously or a single file. For
-multiple-file mode enter a directory as output, if directory does not exist it will be created in current
-working directory. For single file mode enter a file name as output.
+ Examples are
+ * feature-file-*12345*.tsv (only patient id, no replicate)
+ * feature-file-*12345_A1*.tsv (both patient id and replicate id
 
-Each file to be processed must have the sample name specified somewhere within the file according to the pattern
-"XY#####" where X and Y are arbitrary alphabetical characters within the range [A-Z] (upper or lowercase) and "#"
-represents a digit in the range[0-9]. The x-coordinates and y-coordinates should be given in columns named "xcoord"
+The x-coordinates and y-coordinates should be given in columns named "xcoord"
 and "ycoords" respectively. The column containing the annotated feature can be named arbitrarily (default is "tumor"),
 and should be passed as an argument (feature) if not "tumor". The annotation of interest (only support) for one as of now
 should be passed as an argument if other than default ("tumor".)
@@ -25,8 +19,8 @@ should be passed as an argument if other than default ("tumor".)
 Three parameters are used for cluster generation:
     
     max_distance    - the maximum manhattan distance for two spots to be considered neihbours 
-    min_spots       - the number of neihbours a spot must have to be considered an inner point of the cluster
     min_total_spots - the minimum number of spots that a cohort of spots must have to be considered a tumor
+    norm            - Which Minkowski norm to be used in distance estimation
 
 # Installation
 ## 1. Clone repo
@@ -42,8 +36,11 @@ sudo install.sh
 ```
 ## 3. Run
 ```bash
-ST_feature_extract --input /Annotated_File_Dir/single_file --output result_of_single_file.tsv --min_spot 2 --max_dist 3 --min_total_spots 5 --save_plot
+ST_feature_extract --input /Annotated_File_Dir/single_file --output result_of_single_file.tsv --norm -1 --max_dist 1.5 --min_total_spots 4 --save_plot
 ```
+
+_the above script will assign two spots with a distance 1.5 (measured by the infty-norm) as neighbours. At least 4 spots must be found within a cluster
+in order to classify it as a tumor. Smaller clusters will be discarded. The result will be saved both as a .tsv file and an image._
 
 
 
