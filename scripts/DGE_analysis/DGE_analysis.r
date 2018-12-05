@@ -140,6 +140,8 @@ DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
   return(dds)
 }
 
+#TODO Make a results formatting file printing top genes. Top into one output folder and zip.
+
 main <- function(count_input_dir,
                  feature_input_dir,
                  select_for,

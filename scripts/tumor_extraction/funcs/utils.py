@@ -51,10 +51,10 @@ def get_sample_name(filename):
     
     """
     
-    pattern = '[A-Z]{2}\d{5}[_][A-Z]\d'
+    pattern = '\d{4,5}[_][A-Z]\d'
     res = re.search(pattern, filename.upper())[0]
     if len(res) == 0:
-        pattern = '[A-Z]{2}\d{5}'
+        pattern = '\d{4,5}'
         res = re.search(pattern.filename.upper())[0]
     return  res
 
@@ -71,6 +71,8 @@ def get_coordinates(df):
         crd - numpy array of size Nx2
     
     """
+    assert 'xcoord' in df.columns and 'ycoord' in df.columns, "Feature file not properly formatted"
+    
     x_coord = df['xcoord'].values.reshape(-1,1)
     y_coord = df['ycoord'].values.reshape(-1,1)
     
