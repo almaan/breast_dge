@@ -7,8 +7,8 @@ Files should be provided with a 4 or 5 digit patient id, if replicates are prese
 appending an underscore followed by the replicate id (one capital letter followed by a digit).
 
  Examples are
- * feature-file-*12345*.tsv (only patient id, no replicate)
- * feature-file-*12345_A1*.tsv (both patient id and replicate id
+ * feature-file-*12345*.tsv _(only patient id, no replicate)_
+ * feature-file-*12345_A1*.tsv _(both patient id and replicate id)_
 
 The x-coordinates and y-coordinates should be given in columns named "xcoord"
 and "ycoords" respectively. The column containing the annotated feature can be named arbitrarily (default is "tumor"),
