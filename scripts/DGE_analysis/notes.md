@@ -27,7 +27,7 @@
  * **Must comment on code, non-documented so far**
 
 * Implement multifeature DGE [ ]
-* Implement logger as to register how many spots that are dropped, and procedure [ ]
+* Implement logger as to register how many spots that are dropped, and procedure [/]
 * Look at parallelization options, try to put this up to the cluster [ ]
 * Add timer to logger as to get a sense of how long each analysis is [ ]
 * enable gene-selection (would be interesting to look at say PAM50) [/] _implemented_ but not _evaluated_
