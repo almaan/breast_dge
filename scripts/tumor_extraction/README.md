@@ -43,4 +43,5 @@ _the above script will assign two spots with a distance 1.5 (measured by the inf
 in order to classify it as a tumor. Smaller clusters will be discarded. The result will be saved both as a .tsv file and an image._
 
 
-
+## Tips
+The positing of the spots is not perfect, thus some marginal for the distance should be used. As to illustrate; If the Von Neumann neighbourhood is to be used as neighbourhood, then rather than using the l1-norm with distance 1 use distance 1.3 or 1.5 allowing for the slight misplacement of spots to be accounted for.
