@@ -35,7 +35,7 @@ def _version_control():
     
     return version
 
-def configure_logger(logger, log_name):
+def configure_logger(logger, log_name, output_dir):
         """
         Configures logger. Messages will be passed to STDOUT and a log-file. If
         no log-file name is defined by the user the default name in the form 
@@ -52,6 +52,10 @@ def configure_logger(logger, log_name):
         """
     
         prefix = 'feature_extraction-'    
+        
+        if osp.isfile(output_dir):
+            output_dir = osp.dirname(output_dir)
+        
     
         if isinstance(log_name, bool):
             timestamp = str(datetime.datetime.now()).replace(':','_').replace(' ','_')
@@ -64,7 +68,7 @@ def configure_logger(logger, log_name):
         
         
         c_handler = logging.StreamHandler()
-        f_handler = logging.FileHandler(osp.join(os.getcwd(),log_out))
+        f_handler = logging.FileHandler(osp.join(output_dir,log_out))
         
         c_handler.setLevel(logging.INFO)
         f_handler.setLevel(logging.INFO)

@@ -14,7 +14,7 @@ import os
 
 import numpy as np
 
-pth = "/home/alma/ST-2018/CNNp/DGE/data/test_data/results1"
+pth = "/home/alma/ST-2018/CNNp/DGE/res"
 
 # TODO : Make this clean
 

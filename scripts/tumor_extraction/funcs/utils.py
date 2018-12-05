@@ -13,9 +13,14 @@ import pandas as pd
 import numpy as np
 import re
 from scipy.spatial.distance import cityblock as l1
-
+import sys
 
 def match_rownames(data,sample_id):
+    """
+    generates new rownames which useful for downstream processes. Rownames are on form
+    sample_id_[x_coord]x[y_coord]
+    
+    """
     idx = np.apply_along_axis(func1d = lambda x: '_'.join([sample_id,'x'.join([str(int(round(x[0],0))),str(int(round(x[1],0)))])]),
                               axis = 1,
                               arr = data[['xcoord','ycoord']].values)
@@ -30,10 +35,10 @@ def load_file(filename):
                          sep = '\t',
                          index_col = 0,
                          )
+        return df
     except Exception as e:
         logger.error(f'Could not load file : {e}')        
-    return df
-
+        sys.exit(0)
 
 def get_sample_name(filename):
     """

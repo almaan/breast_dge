@@ -44,12 +44,12 @@ def visualizeTumorSelection(data,
     """
     
     unique_labels = np.unique(labels)
-    colormap = plt.cm.Dark2(np.arange(unique_labels.shape[0]))
+    colormap = plt.get_cmap(plt.cm.Dark2_r)
+    mymap = colormap(np.linspace(0.1,1,unique_labels.shape[0]+1))
     crd = get_coordinates(data)
 
     fig, ax = plt.subplots(1,2, figsize = figsize)
-    
-    for (color, label_idx) in zip(colormap,np.unique(labels)):
+    for (color, label_idx) in enumerate(unique_labels):
             
             pos = (labels == label_idx)
             if label_idx >= 0:
@@ -57,7 +57,8 @@ def visualizeTumorSelection(data,
                               y = crd[pos,1],
                               s = marker_size,
                               edgecolors = 'black',
-                              c = color)
+                              facecolor = mymap[color],
+                              )
             else:
                 ax[0].scatter(x = crd[pos,0],
                               y = crd[pos,1],
