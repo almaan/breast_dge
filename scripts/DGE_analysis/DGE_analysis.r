@@ -38,18 +38,12 @@ clean_matrix <- function(mat, min_spot = 100, min_gene = 0.05, remove_ambigious)
   return(mat)
 }
 
-#redunant currently, but if more advanced functions shouls be added
-#could potentially show useful
-#read_gene_file <- function(pth){
-#  gene_names <- read.table(pth, header= FALSE, sep = "\n")
-#  return(gene_names)
-#}
 
 generate_matrices <- function(count_pth,
                               feature_pth,
                               select_for,
                               feature_name,
-                              k_neighbours,
+                              k_members,
                               n_samples,
                               max_dist,
                               gene_file,
@@ -84,6 +78,7 @@ generate_matrices <- function(count_pth,
   for(k in c(1:length(count_files))) {
     cmat <- load_matrix(count_pth,count_files[k])
     tag <- get_id(count_files[k])
+    flog.info(sprintf("Sampling form sample %s", tag))
     
     if (!is.null(gene_file)){
       select_gene <- intersect(gene_names, colnames(cmat)) 
@@ -97,7 +92,7 @@ generate_matrices <- function(count_pth,
     cmat <- cmat[inter,]
     
     matl <- make_pseudo(cmat,fmat,select = feature_name, lim = max_dist, 
-                        k_neighbors = k_neighbours,
+                        k_members = k_members,
                         n_samples = n_samples)
     
     cmat <- matl$pseudo_cnt
@@ -105,7 +100,8 @@ generate_matrices <- function(count_pth,
     
         
     fmat['patient'] <- unlist(strsplit(tag,'_'))[1]
-    fmat['replicate'] <- unlist(strsplit(tag,'_'))[2]
+    #fmat['replicate'] <- unlist(strsplit(tag,'_'))[2]
+    fmat['replicate'] <- tag #unsure about best way to do this
     
     count_matrix <- bind_rows(count_matrix,cmat)
     feature_matrix <- bind_rows(feature_matrix,fmat)
@@ -148,7 +144,7 @@ main <- function(count_input_dir,
                  output_dir,
                  design_file,
                  feature_name,
-                 k_neighbours,
+                 k_members,
                  n_samples,
                  max_dist,
                  gene_file,
@@ -163,7 +159,7 @@ main <- function(count_input_dir,
                                 feature_pth = feature_input_dir,
                                 select_for = select_for,
                                 feature_name = feature_name,
-                                k_neighbours = k_neighbours,
+                                k_members = k_members,
                                 n_samples = n_samples,
                                 max_dist = max_dist,
                                 gene_file = gene_file,
@@ -186,8 +182,8 @@ args <- parse_args(parser)
 
 flog.threshold(DEBUG)
 flog.info("Starting DGE analysis")
-flog.info(sprintf("Will be using %d neighbors for sampling generating %d samples per section", 
-                  args$k_neighbours, args$n_samples))
+flog.info(sprintf("Will be using %d neighbours for sampling generating %d samples per section", 
+                  args$k_members, args$n_samples))
 
 main(count_input_dir = args$count_dir,
      feature_input_dir = args$feature_dir,
@@ -196,7 +192,7 @@ main(count_input_dir = args$count_dir,
      select_for = args$select_for,
      feature_name = args$feature_name,
      gene_file = args$gene_file,
-     k_neighbours = args$k_neighbours,
+     k_members = args$k_members,
      n_samples = args$n_samples,
      max_dist = args$max_dist,
      remove_ambigious = args$remove_ambiguous)

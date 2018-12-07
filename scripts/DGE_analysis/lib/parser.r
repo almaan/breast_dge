@@ -74,9 +74,9 @@ make_parser <- function(parser) {
                                     collapse = " "))
   
   parser <- add_option(parser,
-                       c("-k", "--k_neighbours"),
+                       c("-k", "--k_members"),
                        default = 20,
-                       help = paste(c("number of neighbours to",
+                       help = paste(c("number of spots to",
                                       "use for pooling of each sample"),
                                     collapse = " "))
   
