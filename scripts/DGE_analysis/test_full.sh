@@ -1,6 +1,6 @@
 count_dir="/home/alma/ST-2018/CNNp/data/pre-tile-extraction"
 feature_dir="/home/alma/ST-2018/CNNp/DGE/data/YAO_feature_files"
-select_for="/home/alma/ST-2018/CNNp/DGE/data/test_dge_expression/env/select.samples.dat"
+select_for="/home/alma/ST-2018/CNNp/DGE/data/test_dge_expression/env/select.samples2.dat"
 design_file="/home/alma/ST-2018/CNNp/DGE/data/test_dge_expression/env/design.test2.dat"
 #output_dir="/home/alma/ST-2018/CNNp/DGE/data/test_dge_expression/res"
 

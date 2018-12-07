@@ -87,6 +87,14 @@ make_parser <- function(parser) {
                                       "from the given section."),
                                     collapse = " "))
   
+  parser <- add_option(parser,
+                       c("-db", "--debug"),
+                       default = FALSE,
+                       action = "store_true",
+                       help = paste(c("set logger level to debug",
+                                      "otherwise info is used."),
+                                    collapse = " "))
+  
   #TODO : Implement option to run on multiple cores
   parser <- add_option(parser,
                        c("-w", "--workers"),

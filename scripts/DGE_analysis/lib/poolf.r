@@ -34,20 +34,23 @@ get_idx <- function(data,
   doreplace <- (dim(nn$id)[1]) < n_samples
   if (doreplace) {
     flog.debug("More requested samples than spots with feature > Using Replacement")
+  
   } else {
     flog.debug("Less requested samples than spots with feature > No Replacement")
   }
   choice <- sample(1:(dim(nn$id)[1]),size = n_samples, replace = doreplace)
-  
+  #TODO add alternative for purely random sampling not based on distance
   #get neighbour(s) of random points
   for (spot in choice){
    #find how many neighbours within limit that spot have
    inlim <- nn$dist[spot,] <= lim
    n_inlim <- sum(inlim)
+   
    if (n_inlim == 0){
      #CASE: no neighbours are within limit 
      flog.debug("No neighbours within threshold > Replicating single spot")
      idx <- replicate(k_members,spot)
+   
    } else if (inlim < k_members -1) {
      #CASE: has neighbours but less than specifed
      flog.debug(sprintf("%d neighbour(s) within threshold. > Sampling from neighbours",
@@ -55,6 +58,7 @@ get_idx <- function(data,
      
      idx <- c(spot,nn$id[spot,inlim])
      idx <- c(idx, sample(idx, k_members - length(idx),replace = TRUE))
+   
    } else {
      #CASE: has k_members within limit
      flog.debug('%d neighbours where within threshold > No Resampling required')
