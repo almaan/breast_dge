@@ -91,9 +91,12 @@ get_ratio <- function(n_samples, tabb){
   #adjust for zero assigned members in low abundance cases
   #TODO: make sure that this works for multiple features not just one
   if (any(ratio == 0)){
-    ratio[ratio == 0] = ratio[ratio == 0] + 1
-    ratio[!(ratio == 0)] = ratio[!(ratio == 0)] - 1
+    pos <-(ratio== 0)
+    ratio[pos] = ratio[pos] + 1
+    ratio[!(pos)] = ratio[!(pos)] - 1
   }
+  flog.debug(sprintf("the ratio between categories are %s", 
+                     paste(rbind(ratio,names(ratio)), collapse = ":")))
   
   return(as.vector(ratio))
 }
