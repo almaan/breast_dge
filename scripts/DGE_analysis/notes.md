@@ -36,6 +36,12 @@
 * By nesting the replicates and patients one can capture their discrepancies without having redundant information, not that this needs ZERO COLUMN REMOVAL if certain samples does not have k-replicates
 * Have not confirmed by Jonas that this works but see no problem as to why
 
+2.Problem :  _Remove ambigious_ part in clean-matrix calling execution halt:
+* Always seemed to crash on clear ambigious part, double checked everything
+
+2. Solution :  _Remove ambigious_ part in clean-matrix calling execution halt
+* Had misspelled ambigious in parser function...I'm a stupid piece of shit
+
 ## Code:
 
 * Write script for pooling [x]
@@ -50,15 +56,18 @@
 * Implement multifeature DGE [X]
 * Implement logger as to register how many spots that are dropped, and procedure [X]
 * Look at parallelization options, try to put this up to the cluster [ ]
-* Add timer to logger as to get a sense of how long each analysis is [ ]
+* Add timer to logger as to get a sense of how long each analysis is [X]
 * enable gene-selection (would be interesting to look at say PAM50) [/] _implemented_ but not _evaluated_
 * Could one subset the spots, not looking at all of them in order to increase run time [x]
 * Add version print on-top [X]
 * Rewrite code for nesting of replicates, looks ugly as fuck atm [ ]
-* Comment code for DGE-analysis [ ]
-* Take care of argparser printing for logging purposes
-* Print log to file [ ]
-* make output with top n-genes (take as argument from cli) [ ]
+* Comment code for DGE-analysis [x]
+* Take care of argparser printing for logging purposes [ ]
+* Print log to file [X]
+* make output with top n-genes (take as argument from cli) [X]
+
+* Move remove main-function, that is stupid. Just put everything in the main-body rather.[X]
+* Move helper-functions to utils-file. [X]
 
 ## Remember
 * In DGE\_analysis.r the count matrix is taken as samples x genes

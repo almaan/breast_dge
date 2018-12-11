@@ -12,64 +12,7 @@ sh(library(futile.logger))
 #load functions
 source(paste(c(getwd(),"lib/parser.r"),collapse = "/"))
 source(paste(c(getwd(),"lib/poolf.r"), collapse = "/"))
-
-get_git_version <- function(){
-  #' prints the git version of the used source file
-  sys.args <- commandArgs(trailingOnly = FALSE) #get input arguments inclusive path
-  has_filename <- sys.args[grepl('--file=',sys.args, perl = TRUE)] #get the argument containing filename
-  
-  filepath <- gsub('--file=',"", #replace anchor --file with non to only get path
-                  has_filename,
-                  ignore.case = FALSE)
-  
-  execpth <- dirname(filepath) #get directory of sourcefile
-  
-  cmd <- sprintf("cd %s; git describe --tags; cd %s", execpth, getwd()) #command to execute
-  version <- system(command = cmd, intern = TRUE) #intern = TRUE to catch return from system call
-  
-  return(version)
-}
-
-save_tmp <- function(count_matrix, feature_matrix, output_dir){
-  #' saving temporary file in-case of crash as well as debug purpose
-  flog.info('save temporary feature matrix')
-  write.table(feature_matrix,file = paste(c(dirname(output_dir),'tmp.feature.file.tsv'),collapse="/"), sep = "\t")
-  flog.info("save temporary count matrix")
-  write.table(count_matrix,file = paste(c(dirname(output_dir),'tmp.count.file.tsv'),collapse="/"), sep = "\t")
-}
-
-load_matrix <- function(main_pth, file_name, nrows = -1){
-  #' Load count matrix expects format samples x genes
-  mat <- read.csv(paste(c(main_pth,file_name),collapse="/"), sep = "\t", nrows = nrows, header = TRUE, row.names = 1)
-  return(mat)
-}
-load_features <- function(main_pth,file_name) {
-  #' load feature file complementary to count matrix
-  feat <- read.csv(paste(c(main_pth,file_name),collapse="/"), sep = "\t",
-                   header = TRUE, row.names = 1, stringsAsFactors = TRUE)
-  return(feat)
-}
-
-get_id <- function(path) {
-  #'get sample id. Expects a 4-5 character long patient id with the
-  #'two character replicate id appended to this separated by an underscore
-  return(str_extract(path,pattern = "\\d{4,5}_\\w{2}"))
-}
-
-clean_matrix <- function(mat, min_sample = 0.05, min_gene = 100, remove_ambigious){
-  #matrix should be formatted n_samples x n_genes
-  keep_samples <- rowMeans(mat !=0) >= min_sample
-  keep_genes <- colSums(mat) >= min_gene
-  mat <- mat[keep_samples,keep_genes]
-  if (remove_ambigious){
-    n_before <- dim(mat)[2]
-    mat <-mat[,!grepl('.*ambig.*',colnames(mat))]
-    n_after <- dim(mat)[2]
-    flog.info(sprintf("Removed %d ambigious genes out of %d total", (n_before-n_after), n_before))
-  }
-  return(mat)
-}
-
+source(paste(c(getwd(),"lib/utils.r"), collapse ="/"))
 
 generate_matrices <- function(count_pth,
                               feature_pth,
@@ -115,10 +58,13 @@ generate_matrices <- function(count_pth,
   feature_matrix <- data.frame()
   
   #loop over all count matrices to be analyzed
+  tfull <- 0.0
   for(k in c(1:length(count_files))) {
+    tstart <- Sys.time()
     cmat <- load_matrix(count_pth,count_files[k]) #load single count matrix
     tag <- get_id(count_files[k]) #get patient id of count matrix, used for feature file pairing
-    flog.info(sprintf("Sampling from sample %s : %d / %d", tag, k, length(count_files)))
+    eta <- ifelse(k>1,as.character(round(rtime,2)),'--')
+    flog.info(sprintf("Pooling from sample %s : %d / %d | ETA : %smin", tag, k, length(count_files), eta))
     
     #select only specifed genes if such are given
     if (!is.null(gene_file)){
@@ -145,32 +91,32 @@ generate_matrices <- function(count_pth,
     
     patient <- unlist(strsplit(tag,'_'))[1]
     #set patient and replicate for pseudo samples
+    fmat['replicate'] <- k
     fmat['patient'] <- patient
-    #fmat['replicate'] <- k
-    
-    #used for replicate nesting. Not very pretty.
-    if (k > 1) {
-      if (patient %in% feature_matrix[['patient']]) {
-        repl <- repl + 1
-      } else {
-        repl <- 1
-      }
+
+    #for nesting of patients and replicates in DESeq2    
+    if (ifelse(k > 1,patient %in% feature_matrix[['patient']],FALSE)) {
+      #if not first iteration and seen patient
+      repl <- repl + 1
     } else {
+      #if first iteration or new patient
       repl <- 1
+    fmat['replicate.nested'] <- repl
     }
-    fmat['replicate'] <- repl
-    
     
     #add pseudo-samples to full count matrix and feature matrix
     count_matrix <- bind_rows(count_matrix,cmat)
     feature_matrix <- bind_rows(feature_matrix,fmat)
-    
+  
   #save results temporarily, only used in larger runs
   #TODO: once code works, add unlink in the end to remove tmp files
   if (k %% 20 == 0) {
       save_tmp(count_matrix,feature_files,output_dir)
-      }
-    }
+  }
+  #estimate remaining time
+  tfull <- tfull + as.numeric((Sys.time() - tstart))/60
+  rtime <- tfull/k * (length(count_files)-k)
+  }
   
   #set rownames for easy manipulation
   rownames(count_matrix) <- c(1:dim(count_matrix)[1])
@@ -186,6 +132,7 @@ generate_matrices <- function(count_pth,
   #treat features as factors for categorical analysis
   #feature_matrix['replicate'] <- as.factor(feature_matrix[['replicate']])
   feature_matrix['replicate'] <- as.factor(feature_matrix[['replicate']])
+  feature_matrix['replicate.nested'] <- as.factor(feature_matrix[['replicate.nested']])
   feature_matrix['patient'] <- as.factor(feature_matrix[['patient']])
   
   feature_matrix[feature_name] <- as.factor(feature_matrix[[feature_name]])
@@ -223,9 +170,11 @@ DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
   }
   
   dds <- DESeqDataSet(se,design = design_formula)
+  flog.debug("Successfully prepared DESeq Dataset")
   sizeFactors(dds) <- scran_size_factors
+  flog.debug("Successfully computes scran size factors")
   dds$tumor <- relevel(dds$tumor, "non")
-  print("came here")
+  flog.debug('releveled tumor as to contraste agains "non"')
   dds<-DESeq(dds, full = mm)
   #dds<-DESeq(dds)
   return(dds)
@@ -233,42 +182,6 @@ DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
 
 #TODO Make a results formatting file printing top genes. Top into one output folder and zip.
 
-main <- function(count_input_dir,
-                 feature_input_dir,
-                 select_for,
-                 output_dir,
-                 design_file,
-                 feature_name,
-                 k_members,
-                 n_samples,
-                 max_dist,
-                 gene_file,
-                 remove_ambigious){
-  
-  design_formula <- readLines(file(design_file,"r"))
-  design_formula <- as.formula(design_formula[!grepl('#',design_formula)])
-  flog.info(paste(c("Using design : ", design_formula ),collapse = " "))
-  close(file(design_file))
-  
-  matrices <- generate_matrices(count_pth = count_input_dir,
-                                feature_pth = feature_input_dir,
-                                select_for = select_for,
-                                feature_name = feature_name,
-                                k_members = k_members,
-                                n_samples = n_samples,
-                                max_dist = max_dist,
-                                gene_file = gene_file,
-                                remove_ambigious = remove_ambigious,
-                                output_dir = output_dir)
-  
-  dds <- DESeq_pipline(matrices$count_matrix,
-                       matrices$feature_matrix,
-                       design_formula = design_formula)
-  res <- results(dds)
-  
-  write.csv(as.data.frame(res), file = paste(c(output_dir), collapse = "/"))
-     
-}
 
 #snowparam <- SnowParam(workers = 4, type = "SOCK")
 #register(snowparam, default = TRUE)
@@ -284,22 +197,39 @@ if (args$debug){
   flog.threshold(INFO)
 }
 
+flog.appender(appender.tee(gsub('\\.csv','\\.log',args$output_dir)),name = "ROOT")
+
+flog.info(timestamp(quiet = TRUE))
 flog.info(sprintf("Using github version %s", get_git_version()))
 #TODO: format better argument print
 #flog.info("Program iniated with argumens")
 #flog.info(args)
-flog.info("__Starting DGE analysis__")
+flog.info(banner())
+
 flog.info(sprintf("Will be using %d neighbours for sampling generating %d samples per section", 
                   args$k_members, args$n_samples))
 
-main(count_input_dir = args$count_dir,
-     feature_input_dir = args$feature_dir,
-     design_file = args$design_file,
-     output_dir =args$output_dir,
-     select_for = args$select_for,
-     feature_name = args$feature_name,
-     gene_file = args$gene_file,
-     k_members = args$k_members,
-     n_samples = args$n_samples,
-     max_dist = args$max_dist,
-     remove_ambigious = args$remove_ambiguous)
+design_formula <- readLines(file(args$design_file,"r"))
+design_formula <- as.formula(design_formula[!grepl('#',design_formula)])
+flog.info(paste(c("Using design : ", design_formula ),collapse = " "))
+close(file(args$design_file))
+
+matrices <- generate_matrices(count_pth = args$count_dir,
+                              feature_pth = args$feature_dir,
+                              select_for = args$select_for,
+                              feature_name = args$feature_name,
+                              k_members = args$k_members,
+                              n_samples = args$n_samples,
+                              max_dist = args$max_dist,
+                              gene_file = args$gene_file,
+                              remove_ambigious = args$remove_ambigious,
+                              output_dir = args$output_dir)
+
+dds <- DESeq_pipline(matrices$count_matrix,
+                     matrices$feature_matrix,
+                     design_formula = design_formula)
+res <- results(dds)
+topnres <- df[c('X', 'padj')][order(df[['padj']])[1:args$top_n],]
+
+write.csv(as.data.frame(res), file = paste(c(args$output_dir), collapse = "/"))
+write.csv(as.datata.frame(res), file = gsub('\\.csv',sprintf('\\.top%d\\.csv',args$top_n),args$out_dir))

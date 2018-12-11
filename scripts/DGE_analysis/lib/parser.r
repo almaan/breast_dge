@@ -49,7 +49,7 @@ make_parser <- function(parser) {
                                     collapse = " "))
   
   parser <- add_option(parser,
-                       c("-a", "--remove_ambiguous"),
+                       c("-a", "--remove_ambigious"),
                        default = FALSE,
                        action = "store_true",
                        help = paste(c("remove unambigious reads",
@@ -93,6 +93,14 @@ make_parser <- function(parser) {
                        action = "store_true",
                        help = paste(c("set logger level to debug",
                                       "otherwise info is used."),
+                                    collapse = " "))
+  
+  parser <- add_option(parser,
+                       c("-tn", "--top_n"),
+                       default = 100,
+                       type = "integer",
+                       help = paste(c("save top n genes and p_adj values",
+                                      "to file for easy analysis."),
                                     collapse = " "))
   
   #TODO : Implement option to run on multiple cores
