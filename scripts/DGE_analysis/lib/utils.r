@@ -42,10 +42,10 @@ get_id <- function(path) {
   return(str_extract(path,pattern = "\\d{4,5}_\\w{2}"))
 }
 
-clean_matrix <- function(mat, remove_ambigious = TRUE, min_sample = 0.05, min_gene = 100){
+clean_matrix <- function(mat, remove_ambigious = TRUE, min_sample = 0.1 , min_gene = 1){
   #matrix should be formatted n_samples x n_genes
-  keep_samples <- rowMeans(mat !=0) >= min_sample
-  keep_genes <- colSums(mat) >= min_gene
+  keep_samples <- rowMeans(mat > 0) >= min_sample 
+  keep_genes <- colMeans(mat > 0) >= min_gene
   mat <- mat[keep_samples,keep_genes]
   if (remove_ambigious){
     n_before <- dim(mat)[2]

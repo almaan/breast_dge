@@ -84,18 +84,18 @@ get_ratio <- function(n_samples, tabb){
   
   #adjust for evenutal abundance/deficiency in samples from rounding
   if (sum(ratio) > n_samples) {
-    ratio[sample(1:length(tabb))] = ratio[sample(1:length(tabb))] -1
+    ratio[order(ratio)[length(ratio)]] <- ratio[order(ratio)[length(ratio)]] -1
   } else if (sum(ratio) < n_samples) {
-    ratio[sample(1:length(tabb))] = ratio[sample(1:length(tabb))] +1
+    ratio[1] <- ratio[order(ratio)[1]] + 1
   }
   #adjust for zero assigned members in low abundance cases
-  #TODO: make sure that this works for multiple features not just one
   if (any(ratio == 0)){
     pos <-(ratio== 0)
-    ratio[pos] = ratio[pos] + 1
-    ratio[!(pos)] = ratio[!(pos)] - 1
+    ratio[pos] <- ratio[pos] + 1
+    sub <- sample(which(pos))
+    ratio[sub] <- ratio[sub] - 1
   }
-  flog.debug(sprintf("the ratio between categories are %s", 
+  flog.info(sprintf("the ratio between categories are %s", 
                      paste(rbind(ratio,names(ratio)), collapse = ":")))
   
   return(as.vector(ratio))

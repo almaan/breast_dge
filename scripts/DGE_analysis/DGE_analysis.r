@@ -101,8 +101,8 @@ generate_matrices <- function(count_pth,
     } else {
       #if first iteration or new patient
       repl <- 1
-    fmat['replicate.nested'] <- repl
     }
+    fmat['replicate.nested'] <- repl
     
     #add pseudo-samples to full count matrix and feature matrix
     count_matrix <- bind_rows(count_matrix,cmat)
@@ -174,14 +174,11 @@ DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
   sizeFactors(dds) <- scran_size_factors
   flog.debug("Successfully computes scran size factors")
   dds$tumor <- relevel(dds$tumor, "non")
-  flog.debug('releveled tumor as to contraste agains "non"')
+  flog.debug('releveled tumor as to contraste against "non"')
   dds<-DESeq(dds, full = mm)
   #dds<-DESeq(dds)
   return(dds)
 }
-
-#TODO Make a results formatting file printing top genes. Top into one output folder and zip.
-
 
 #snowparam <- SnowParam(workers = 4, type = "SOCK")
 #register(snowparam, default = TRUE)
@@ -199,15 +196,17 @@ if (args$debug){
 
 flog.appender(appender.tee(gsub('\\.csv','\\.log',args$output_dir)),name = "ROOT")
 
+
+flog.info(banner())
 flog.info(timestamp(quiet = TRUE))
 flog.info(sprintf("Using github version %s", get_git_version()))
+
 #TODO: format better argument print
 #flog.info("Program iniated with argumens")
 #flog.info(args)
-flog.info(banner())
 
-flog.info(sprintf("Will be using %d neighbours for sampling generating %d samples per section", 
-                  args$k_members, args$n_samples))
+flog.info(sprintf("Will be using %d neighbours for sampling generating %d samples per section | max_ dist is %d", 
+                  args$k_members, args$n_samples, args$max_dist))
 
 design_formula <- readLines(file(args$design_file,"r"))
 design_formula <- as.formula(design_formula[!grepl('#',design_formula)])
@@ -228,8 +227,10 @@ matrices <- generate_matrices(count_pth = args$count_dir,
 dds <- DESeq_pipline(matrices$count_matrix,
                      matrices$feature_matrix,
                      design_formula = design_formula)
-res <- results(dds)
-topnres <- df[c('X', 'padj')][order(df[['padj']])[1:args$top_n],]
 
-write.csv(as.data.frame(res), file = paste(c(args$output_dir), collapse = "/"))
-write.csv(as.datata.frame(res), file = gsub('\\.csv',sprintf('\\.top%d\\.csv',args$top_n),args$out_dir))
+res <- data.frame(results(dds))
+topnres <- subset(res[order(res$padj)[1:min(args$top_n,dim(res)[1])],],select = 'padj')
+
+write.csv(res, file = paste(c(args$output_dir), collapse = "/"))
+write.csv(topnres, file = gsub('\\.csv',sprintf('\\.top%d\\.csv',args$top_n),args$output_dir))
+flog.info("DGE Analysis Successfully Completed")

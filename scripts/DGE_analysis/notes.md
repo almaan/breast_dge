@@ -14,6 +14,8 @@
 * Could potentially write small software for her to do that
 * Use Youden's J statistics to find a good threshold
 
+* Write bash script to analyze each patient individually [X]
+
 ## Problems : 
 
 1. _Problem - Null Rank matrix_ : SOLVED [X]
@@ -79,3 +81,6 @@
 * **number of spots** pooled seems to be more significant than samples --> less than or equal to 50 give poor results
 * Run multiple DGE for same samples and take intersection of DGE-genes as to make sure pooling does not interfere
  * Have looked at intersection, out of 500 top genes 57 matched. Will do more extensive analysis
+ * Sampling 10 spots from each section using -max\_dist 3 and  -k\_neighbours 200 does only have two overlapping genes compared to pooling all spots from either category and comparing betweeen different samples
+ * Now looking at single patient comparisions, comparing between the three replicates. Whenever doing this *remember* to remove those with only one class, orherwise error
+
