@@ -10,3 +10,5 @@ output_results*/
 *.tsv
 #version ctrl
 *version_control*
+#bash
+.sh

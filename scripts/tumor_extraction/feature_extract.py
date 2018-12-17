@@ -56,7 +56,7 @@ def main(input_name,
     logger.info(f"reading file from {input_name:s}")
     #load and prepare data
     df = load_file(input_name)
-    #generate rownames based on x and y coordinates, for downstream
+    #generate rownames based on x and y coordinates, for downstream processes
     df.index = match_rownames(df,get_sample_name(input_name))
     #get coordinates from feature file
     crd = get_coordinates(df)
@@ -77,7 +77,7 @@ def main(input_name,
     
     feature_labels = label_to_feature_id(labels)
     
-    df['feature_id'] = feature_labels
+    df['_'.join([feature,'id'])] = feature_labels
     
     #save results
     suffix = 'feature_separation'
@@ -86,12 +86,16 @@ def main(input_name,
         file_output = osp.join(output_name,'_'.join([get_sample_name(input_name), '.'.join([suffix,'tsv'])]))
     
     else:
-        #if output is given as a filename use this as name of output file use this
-        file_output = osp.join(output_name)
+        #if output is given as a filename save in current directory
+        file_output = output_name
     
     #save result as modified feature-file using newly defined rownames and header
-    df.to_csv(file_output, sep = '\t', header = True, index = True)
+    print(file_output)
+    try:
+        df.to_csv(file_output, sep = '\t', header = True, index = True)
     
+    except: 
+        os.mkdir(file_output)
     #if flag for interactinve plotting is included
     if plot:
         try:
@@ -227,7 +231,12 @@ if __name__ == '__main__':
     
     args = prs.parse_args()
     
-    configure_logger(logger, log_name = args.logname, output_dir = args.output)
+    #configure logger
+    configure_logger(logger, 
+                     log_name = args.logname, 
+                     output_dir = args.output, 
+                     input_name = args.input)
+    
     log_header(logger)
     
     arguments = dict(input_name = args.input,

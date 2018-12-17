@@ -27,20 +27,25 @@ def pair_edges(arr, p, thrs):
     
     """
     assert isinstance(arr,np.ndarray)
-    #generate kd-tree from provided array
+    #generate kd-tree object from provided array 
     kd = KDTree(arr)
     ngh = []
-    #identify neighbouring spots
+    #make tuples of neighbouring spots
     for node in range(arr.shape[0]):
         #find all spots witin given distance thrs to a given spot
         #ignore neighbours of lower index than the node as to avoid
         #double edges
         
         ball = filter( lambda x: x > node,
-                      kd.query_ball_point(arr[node,:], r = thrs, p = p))
+                      kd.query_ball_point(arr[node,:], 
+                                          r = thrs, #distance
+                                          p = p, #norm
+                                          ))
+        
         #make list of tuples compatible with graph object edge generation
         pairs = [(node,x) for x in ball]
         ngh = ngh + pairs
+        
     return ngh
 
 def connected_graphs_extraction(crd,
@@ -56,26 +61,27 @@ def connected_graphs_extraction(crd,
              "match number of annotated samples"])
     
     idx = np.repeat(-1, crd.shape[0])
-    #get position of spots to be partitioned
+    #get position of spots with desired feature
     pos = np.where(feature_vector == select_for)[0]
     
     #make sure that at least one spot for given condition is present
     if sum(pos) > 0:
         #create graph object
         G = nx.Graph()
-        #add one node per spot to graph
+        #add some number of nodes as spots to graph, spatial information in pos
         G.add_nodes_from(np.arange(crd[pos,:].shape[0]), pos = crd)
-        #get vertices of connected spots add to graph
+        #generate edges between nodes according to their spatial position
         edges = pair_edges(crd[pos,:], p = p_norm, thrs=maxDist)
         G.add_edges_from(edges)
-        #get the connected components from the graph
+        #get index of connected component for each node
         cc = [list(x) for x in nx.connected_components(G)]
+        
         #remove subgraphs that do not have sufficient number of spots
         if minFeature > 0:
             cc = list(filter(lambda x: len(x) >= minFeature,cc))
         #generate an index vector corresponding for the provided data
         for k,ii in enumerate(cc): 
+            #only assing spots with non-negative cluster index
             idx[pos[ii]] = k        
     
     return(idx)
-

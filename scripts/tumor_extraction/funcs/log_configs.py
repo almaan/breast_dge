@@ -35,7 +35,7 @@ def _version_control():
     
     return version
 
-def configure_logger(logger, log_name, output_dir):
+def configure_logger(logger, log_name, output_dir, input_name):
         """
         Configures logger. Messages will be passed to STDOUT and a log-file. If
         no log-file name is defined by the user the default name in the form 
@@ -58,8 +58,7 @@ def configure_logger(logger, log_name, output_dir):
         
     
         if isinstance(log_name, bool):
-            timestamp = str(datetime.datetime.now()).replace(':','_').replace(' ','_')
-            log_out = ''.join([prefix, timestamp, '.log'])
+            log_out = osp.join(output_dir,'.'.join(input_name.split('.')[0:-1] + ['log']))
             
         else:
             if not (log_name.splot('.')[-1] == 'log'):

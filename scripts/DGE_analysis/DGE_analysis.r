@@ -14,6 +14,8 @@ source(paste(c(getwd(),"lib/parser.r"),collapse = "/"))
 source(paste(c(getwd(),"lib/poolf.r"), collapse = "/"))
 source(paste(c(getwd(),"lib/utils.r"), collapse ="/"))
 
+
+#to generate one large matrix for each sample
 generate_matrices <- function(count_pth,
                               feature_pth,
                               select_for,
