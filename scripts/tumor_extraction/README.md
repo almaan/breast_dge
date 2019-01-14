@@ -1,14 +1,15 @@
 Program to identify isolated regions (such as tumors) from annotated ST-data. Clusters of spatially coherent
 and isolated spots will be marked accordingly to cluster index. The number of clusters
-within the sample does not have to be prespecified (and cannot be either).
+within the sample does not have to be prespecified. Extraction is based on _connected graphs_ within treating the spots within one sample as nodes of a graph. 
 
+The program supports multiple and single file input. In either case the output should be given as a directory. If no such directory exists this will be created.
 
-Files should be provided with a 4 or 5 digit patient id, if replicates are present then this should be indicated by
-appending an underscore followed by the replicate id (one capital letter followed by a digit).
+If the filenames are "tagged" as to contain sample\_id and replicate name. This can be included in the output file as columns as well as in the output name. Use the flag "--tagged" either providing two regex patterns for (1) sample id and (2) replicate. If tagged flag is used but no arguments provided the default pattern shown below will be used.
 
- Examples are
- * feature-file-*12345*.tsv _(only patient id, no replicate)_
- * feature-file-*12345_A1*.tsv _(both patient id and replicate id)_
+**default pattern**
+XY#####\_W#
+
+where X,Y and W represents arbitrary capital letters, and # arbitrary digits
 
 The x-coordinates and y-coordinates should be given in columns named "xcoord"
 and "ycoords" respectively. The column containing the annotated feature can be named arbitrarily (default is "tumor"),
@@ -36,7 +37,7 @@ sudo install.sh
 ```
 ## 3. Run
 ```bash
-ST_feature_extract --input /Annotated_File_Dir/single_file --output result_of_single_file.tsv --norm -1 --max_dist 1.5 --min_total_spots 4 --save_plot
+ST_feature_extract --input /Annotated_File_Dir/single_file --output result_of_single_file.tsv --norm -1 --max_dist 1.5 --min_total_spots 4 --save_plot --tagged
 ```
 
 _the above script will assign two spots with a distance 1.5 (measured by the infty-norm) as neighbours. At least 4 spots must be found within a cluster
