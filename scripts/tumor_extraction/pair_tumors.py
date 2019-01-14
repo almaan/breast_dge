@@ -127,12 +127,11 @@ def main(input, odir, colname):
             else:
                 initial_clusters.append(idx.shape[0])
             
-    
     initial_clusters = np.array(initial_clusters)
     centroids = []
     
     
-    if np.sum(np.abs(np.diff(initial_clusters))) != 0:
+    if np.sum(np.abs(np.diff(initial_clusters))) != 0 and initial_clusters.shape[0] > 0:
         
         min_clusters = np.min(initial_clusters)
         for df in data:
@@ -149,7 +148,7 @@ def main(input, odir, colname):
                     idx = idx + 1
                 
     
-    if np.min(initial_clusters) > 2:        
+    if np.min(initial_clusters) > 2 and initial_clusters.shape[0] > 0:        
         dfs = pair_clusters_centroid(data,colname)
     else:
         dfs = data

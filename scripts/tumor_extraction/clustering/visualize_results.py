@@ -14,7 +14,7 @@ import os
 
 import numpy as np
 
-pth = "/home/alma/ST-2018/CNNp/DGE/res"
+pth = "/home/alma/ST-2018/CNNp/DGE/res/results_paired6"
 
 # TODO : Make this clean
 
@@ -68,4 +68,4 @@ for jj in range(0,int(grid_size[1]+1)):
             break
 
 
-background.save('../clustering_result.png')
+background.save(osp.join(pth,'clustering_result.png'))
