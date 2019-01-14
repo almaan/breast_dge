@@ -29,6 +29,7 @@ logger = logging.getLogger('feature_extraction_log')
 import matplotlib.pyplot as plt
 
 import sys
+import time
 
 import os.path as osp
 import numpy as np
@@ -39,7 +40,7 @@ from funcs.utils import *
 from clustering.connected import *
 from clustering.visual import *
 
-def main(input_name,
+def main(input_names,
          output_name,
          plot,
          save_plot,
@@ -48,91 +49,96 @@ def main(input_name,
          p_norm,
          feature,
          select_for,
+         tagged,
          ):
 
     #if p_norm is negative set to infinity
     p_norm = (np.inf if p_norm == -1 else p_norm)    
+    
+    for input_name in input_names:    
+        logger.info(f"reading file from {input_name:s}")
+        #load and prepare data
+        df = load_file(input_name)
+        #get coordinates from feature file
+        crd = get_coordinates(df)
         
-    logger.info(f"reading file from {input_name:s}")
-    #load and prepare data
-    df = load_file(input_name)
-    #generate rownames based on x and y coordinates, for downstream processes
-    df.index = match_rownames(df,get_sample_name(input_name))
-    #get coordinates from feature file
-    crd = get_coordinates(df)
-    
-    #get indices of isolated feature regions
-    try:
-        labels = connected_graphs_extraction(crd, 
-                                             maxDist = max_dist,
-                                             minFeature = min_total_spots,
-                                             feature_vector = df[feature].values,
-                                             select_for = select_for,
-                                             p_norm = p_norm,
-                                             )
-        
-    except Exception as e:
-        logger.error(f"Could not cluster sample. {e}")
-        sys.exit(0)
-    
-    feature_labels = label_to_feature_id(labels)
-    
-    df['_'.join([feature,'id'])] = feature_labels
-    
-    #save results
-    suffix = 'feature_separation'
-    if osp.isdir(output_name):
-        #if output is given as directory base output filename on sample-id and defined suffix 
-        file_output = osp.join(output_name,'_'.join([get_sample_name(input_name), '.'.join([suffix,'tsv'])]))
-    
-    else:
-        #if output is given as a filename save in current directory
-        file_output = output_name
-    
-    #save result as modified feature-file using newly defined rownames and header
-    print(file_output)
-    try:
-        df.to_csv(file_output, sep = '\t', header = True, index = True)
-    
-    except: 
-        os.mkdir(file_output)
-    #if flag for interactinve plotting is included
-    if plot:
+        #get indices of isolated feature regions
         try:
-            fig, ax = visualizeTumorSelection(df, 
-                                              labels,
-                                              sample_name = get_sample_name(osp.basename(input_name)),
-                                              feature = feature,
-                                              annotation=select_for,
-                                              )
-            plt.show()
-        except Exception as e:
-            logger.info(f"could not generate plot : {e}")
-    #if flag to save plot-result is included. Note how this does _not_ display the graph but only saves it    
-    if save_plot:
-        try:
-            fig, ax = visualizeTumorSelection(df,
-                                              labels,
-                                              sample_name = get_sample_name(osp.basename(input_name)),
-                                              feature=feature,
-                                              annotation=select_for,
-                                              )
+            labels = connected_graphs_extraction(crd, 
+                                                 maxDist = max_dist,
+                                                 minFeature = min_total_spots,
+                                                 feature_vector = df[feature].values,
+                                                 select_for = select_for,
+                                                 p_norm = p_norm,
+                                                 )
             
-            if osp.isdir(output_name):
-                img_output = osp.join(output_name,
-                                      '_'.join([get_sample_name(input_name), '.'.join([suffix,'png'])]))
-            else:
-                img_output = osp.join('_'.join([output_name, '.'.join([suffix,'png'])]))
-                
-            fig.savefig(img_output)
-        
-            logger.info(f"successfully saved image of {input_name:s} at : {img_output:s}")
-    
         except Exception as e:
-            logger.error(f"could not save image of {input_name:s} cluster result : {e}")
-
-    if plot or save_plot:
-        plt.close('all')
+            logger.error(f"Could not cluster sample. {e}")
+            sys.exit(0)
+        
+        feature_labels = label_to_feature_id(labels)
+        
+        df['_'.join([feature,'id'])] = feature_labels
+        
+        #if regex patterns for id and replicate are provided, add as columns to output
+        if tagged[0]:
+            sid, replicate = get_sample_tags(input_name, pattern = tagged, join = False)  
+            df['id'] = sid
+            df['replicate'] = replicate
+        
+        
+        #suffic of output files
+        suffix = 'feature_separation'
+        #basename for output files to be generated
+        ofile_base = '_'.join([get_sample_tags(input_name, pattern = tagged, join = True), suffix])
+        #save results
+        if not osp.isdir(output_name):
+            os.mkdir(output_name)
+                
+        file_output = osp.join(output_name,'.'.join([ofile_base,'tsv']))
+        
+        #save result as modified feature-file using newly defined rownames and header
+        try:
+            df.to_csv(file_output, sep = '\t', header = True, index = True)
+        
+        except: 
+            logger.error(f'could not save file : {file_output:s}')
+            
+        #if flag for interactinve plotting is included
+        if plot:
+            try:
+                fig, ax = visualizeTumorSelection(df, 
+                                                  labels,
+                                                  sample_name = get_sample_tags(osp.basename(input_name),pattern=tagged,join=True),
+                                                  feature = feature,
+                                                  annotation=select_for,
+                                                  )
+                plt.show()
+            except Exception as e:
+                
+                logger.info(f"could not generate plot : {e}")
+        #if flag to save plot-result is included. Note how this does _not_ display the graph but only saves it    
+        if save_plot:
+            try:
+                fig, ax = visualizeTumorSelection(df,
+                                                  labels,
+                                                  sample_name = get_sample_tags(osp.basename(input_name),pattern = tagged, join=True),
+                                                  feature=feature,
+                                                  annotation=select_for,
+                                                  )
+                
+                #if output is given as directory
+                img_output = osp.join(output_name,'.'.join([ofile_base,'png']))
+                    
+                fig.savefig(img_output)
+            
+                logger.info(f"successfully saved image of {input_name:s} at : {img_output:s}")
+        
+            except Exception as e:
+                logger.error(f"could not save image of {input_name:s} cluster result : {e}")
+    
+        if plot or save_plot:
+            plt.close('all')
 
 if __name__ == '__main__':
 
@@ -142,10 +148,10 @@ if __name__ == '__main__':
     prs.add_argument('-i','--input',
                      required = True,
                      type = str,
-                     help = ' '.join(['input file. Must have 5 digit patient id',
-                                      'in the name. If replicates are present in set',
-                                      'indicate this by appending an underscore and',
-                                      'replicate id to the patient id.',
+                     nargs = '*',
+                     help = ' '.join(['input file name. If multiple file names',
+                                      'are given each of them will be read separately',
+                                      'and placed in a common output folder.'
                                      ]),
                      )
     
@@ -178,6 +184,19 @@ if __name__ == '__main__':
                                       'i.e. not only noise.'
                                       ]),
                      )
+    
+    prs.add_argument('-tg','--tagged',
+                     required = False,
+                     default = ['',''],
+                     nargs = '*',
+                     help = ' '.join(['use in order to extract sample id',
+                                      'and replicate. Takes two arguments',
+                                      '(1) regex for sample id and (2) regex',
+                                      'for replicate. If only flag is included',
+                                      'default patterns will be used, being : \n',
+                                      'sample id: [A-Z]{2}[0-9]{5} \n',
+                                      'replicate: (?<=_)([A-Z]{1}[0-9]{1})'
+                                    ]))
     
     prs.add_argument('-n', '--norm',
                      required = False,
@@ -233,13 +252,20 @@ if __name__ == '__main__':
     
     #configure logger
     configure_logger(logger, 
-                     log_name = args.logname, 
-                     output_dir = args.output, 
-                     input_name = args.input)
+                     log_name = '_'.join([(args.logname if args.logname else 'feature_extraction'),time.strftime('%d%m%y_%H:%M')]), 
+                     output_dir = args.output,
+                     )
     
     log_header(logger)
     
-    arguments = dict(input_name = args.input,
+    if (args.tagged != [] and len(args.tagged) != 2):
+        logger.error('Provide two patterns to the "tagged" flag')
+        sys.exit(0)
+    
+    #if tagged flag is used without any arguments. Mimics "const" argument when nargs = '?'    
+    args.tagged = (['[A-Z]{2}[0-9]{5}','(?<=_)([A-Z]{1}[0-9]{1})'] if args.tagged == [] else args.tagged)
+    
+    arguments = dict(input_names = args.input,
                      output_name = args.output,
                      plot = args.plot,
                      save_plot = args.save_plot,
@@ -248,6 +274,7 @@ if __name__ == '__main__':
                      p_norm = args.norm,
                      feature = args.feature,
                      select_for = args.select_for,
+                     tagged = args.tagged
                      )
     try:
         main(**arguments)
@@ -255,5 +282,5 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         from time import sleep
         logger.info(f"Keyboard Interrupt. Will wait for potential writing of files to terminate")
-        sleep(3)
+        sleep(2)
         sys.exit(0)

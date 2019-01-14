@@ -14,6 +14,7 @@ import numpy as np
 import re
 from scipy.spatial.distance import cityblock as l1
 import sys
+import os.path as osp
 
 def match_rownames(data,sample_id):
     """
@@ -40,23 +41,28 @@ def load_file(filename):
         logger.error(f'Could not load file : {e}')        
         sys.exit(0)
 
-def get_sample_name(filename):
+def get_sample_tags(filename,pattern,join=False):
     """
     
     Get name of a sample based on a filename.
-    Uses regex-based patterns. Sample must be
-    names in format "XY#####" where represents
-    two letters in upper or lowercase and # represents
-    a number between 0-9.
+    If a regex pattern for sample and replicate
+    name is provided, the filename 
     
     """
+    res = osp.basename(filename).split('.')[0:-1]
     
-    pattern = '\d{4,5}[_][A-Z]\d'
-    res = re.search(pattern, filename.upper())[0]
-    if len(res) == 0:
-        pattern = '\d{4,5}'
-        res = re.search(pattern.filename.upper())[0]
-    return  res
+    if pattern[0]:
+        rep = re.search(pattern[1],filename)
+        samp = re.search(pattern[0],filename)
+        res = ([samp.group(0),rep.group(0)] if (samp and res) else res)
+    
+    if len(res) > 1 and join:
+        res = '_'.join(res)
+    
+    elif len(res) < 2:
+        res = res[0]
+        
+    return res
 
     
 def get_coordinates(df):
@@ -83,7 +89,7 @@ def get_coordinates(df):
 
 def label_to_feature_id(idx_list,
                    prefix = '',
-                   non_label = 'non',
+                   non_label = '-1',
                    ):
     
     """

@@ -45,14 +45,16 @@ def visualizeTumorSelection(data,
     
     unique_labels = np.unique(labels)
     colormap = plt.get_cmap(plt.cm.Dark2_r)
-    mymap = colormap(np.linspace(0.1,1,unique_labels.shape[0]+1))
+    nlabels = unique_labels.shape[0]
+    mymap = (colormap(np.linspace(0.1,1,nlabels+1)) if nlabels > 1 else 
+                     (['red'] if unique_labels[0] >= 0 else ['green']))
     crd = get_coordinates(data)
 
     fig, ax = plt.subplots(1,2, figsize = figsize)
     for (color, label_idx) in enumerate(unique_labels):
             
             pos = (labels == label_idx)
-            if label_idx >= 0:
+            if label_idx > -1:
                 ax[0].scatter(x = crd[pos,0],
                               y = crd[pos,1],
                               s = marker_size,
@@ -68,9 +70,11 @@ def visualizeTumorSelection(data,
     
     ax[0].set_aspect("equal")
     ax[0].grid(False)
-    ax[0].set_title(f"{sample_name:s} {annotation:s} sepration result")
-    ax[0].set_ylim([0,35])
+    ax[0].set_title(f"{sample_name:s} {annotation:s} separation result")
+    ax[0].set_ylim([35,0])
     ax[0].set_xlim([0,33])
+    ax[0].set_yticks(np.arange(0,35,5))
+    ax[0].set_yticklabels(np.flip(np.arange(0,35,5)))
     
     for annotated_label in  np.unique(data[feature].values):
         pos = (data[feature] == annotated_label)
@@ -79,13 +83,16 @@ def visualizeTumorSelection(data,
         ax[1].scatter(x= crd[pos,0],
                       y = crd[pos,1],
                       c = spot_color,
+                      edgecolors = 'black',
                       s = marker_size)    
     
     ax[1].set_aspect("equal")
     ax[1].grid(False)
     ax[1].set_title(f"{annotation:s} vs. non-{annotation:s}")
-    ax[1].set_ylim([0,35])
+    ax[1].set_ylim([35,0])
     ax[1].set_xlim([0,33])
+    ax[1].set_yticks(np.arange(0,35,5))
+    ax[1].set_yticklabels(np.flip(np.arange(0,35,5)))
     
     fig.tight_layout()
     

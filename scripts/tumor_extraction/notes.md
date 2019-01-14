@@ -7,13 +7,13 @@ Think of the procedure as split into two separate parts
 
 ## Things that Remain to be done for Tumor Extraction
 
-1. Flip y-axis in graphical output, is erronously oriented.
-2. Make sure that multiple arguments can be passed (nargs and "\*" usage)
+1. Flip y-axis in graphical output, is erronously oriented. [X]
+2. Make sure that multiple arguments can be passed (nargs and "\*" usage) [X]
 3. Change name of graph function
 4. Returns error when having no input file, must fix this. Left "TODO" in code for marking
 5. Coloring is weird when no tumor spots are present
 6. Make sure that original tumor annotation is left in output for those regions that are "masked" out, incase of invasive spread out we still want to be able to use these for analysis
-7. Include replicate and patient in input files.
+7. Include replicate and patient in input files. [X]
 8. Do not make dependent on patient name, remove regexp and replace with simple input handling
 
 ## Things to be done for Tumor Pairing

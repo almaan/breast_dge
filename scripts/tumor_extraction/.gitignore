@@ -12,3 +12,5 @@ output_results*/
 *version_control*
 #bash
 .sh
+#ignore dump
+dump/
