@@ -86,8 +86,7 @@ def main(input_names,
             df['id'] = sid
             df['replicate'] = replicate
         
-        
-        #suffic of output files
+        #suffix of output files
         suffix = 'feature_separation'
         #basename for output files to be generated
         ofile_base = '_'.join([get_sample_tags(input_name, pattern = tagged, join = True), suffix])
