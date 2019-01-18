@@ -1,28 +1,32 @@
-#Desgin formulas for DESeq2
-
-
 pre_design_formulas <- function(dfid) {
-
-
-    f1 <- as.formula('~id:pseudo.replicate+pseudo.replicate+id')
-    f2 <- as.formula('~tumor+pseduo.replicate:tumor+pseudo.replicate')
-
-    #TODO:Need to turn this into fstring in order for nice representation
-    if (dfid >= 1) {
-        formulas <- list(f1,f2)
-        out <- formulas[dfid]
+    #' Provide easy pre-written design formulas
+    #' If negative value is passed, information about
+    #' available design formulas is printed. Otherwise 
+    #' string with chosen design formula will be passed
+    
+    f1 <- '~id + id:pseudo.replicate+pseudo.replicate '
+    f2 <- '~tumor+pseudo.replicate:tumor'
+    f3 <- '~id + id:psuedo_replicate + tumor + tumor:pseudo.replicate + tumor:id'
+    formulas <- list(f1,f2,f3)
+    
+    if (dfid >= 1 & dfid <= length(formulas)) {
+        out <- formulas[[dfid]]
 
     }  else {
-        help_text <- paste(c("1. ~ id:pseudo.replicate + pseudo.replicate + id\n",
-                        "\t used to compare between different samples accounting",
-                        "for replicate differences",
-                    "2. ~ tumor + pseduo.replicate:tumor pseudo.replicate\n",
-                        "\t used to compare tumor vs. non-tumor within one",
-                        "patient accounting for replicate differences"
+        help_text <- paste(c(" 1.", f1,
+                              "\n Compare between different samples accounting",
+                              "for replicate differences. Assumes that only one type",
+                              "of spots are present (tumor or non-tumor\n",
+                              "2.", f2,
+                              "\n Compare tumor vs. non-tumor within one",
+                              "patient accounting for replicate differences",
+                              "3.", f3,
+                              "\n Compare between patients and control for replicate",
+                             "as well as tumor\n"
                         ), collapse = " ")
 
 
-        print(help_text)
+        cat(help_text)
         out <- NULL
         return(out)
     }

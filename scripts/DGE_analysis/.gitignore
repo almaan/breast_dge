@@ -1,6 +1,8 @@
 dump/
-dge_se.r
-optimize_threshold.r
 *.txt
 *.html
 *.bak
+pre_scripts/
+pro_scripts/
+graveyard/
+.info
