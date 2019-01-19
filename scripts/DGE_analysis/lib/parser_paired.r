@@ -7,25 +7,28 @@ log_name <- function() {
 
 make_parser <- function(parser) {
   
-  #currently only supports single file directory
-  #TODO: implement multiple directory
-  #idea here https://stackoverflow.com/questions/13790610/passing-multiple-arguments-via-command-line-in-r
-  #TODO: include transposion option   
   
   parser <- add_option(parser,
-                       c("-c","--count_dir"),
+                       c("-c","--count_file"),
                        default = c(),
-                       help = paste(c("directory of count-matrices.",
-                                      "matrix name should be on form",
-                                      '"count_data-ID_Replicate.tsv"'),
+                       help = paste(c("Path to count file(s).",
+                                      "Three options available",
+                                      "1. Single directory : all files in",
+                                      "directory will be loaded.",
+                                      "2. Single File Path : File will be loaded",
+                                      "3. Multiple Paths : All files will be loaded"
+                                      ),
                                     collapse = " "))
   
   parser <- add_option(parser,
-                       c("-f","--feature_dir"),
+                       c("-f","--feature_file"),
                        default = c(),
-                       help = paste(c("directory of feature-files.",
-                                      "file name should be on form",
-                                      '"count_data-ID_Replicate.tsv"'),
+                       help = paste(c("Path to feature file(s)",
+                                      "Note how order of files must match",
+                                      "with that of the count files",
+                                      "Same options as for count_file",
+                                      "argument exists"
+                                      ),
                                     collapse = " "))
   
   parser <- add_option(parser,
@@ -36,14 +39,14 @@ make_parser <- function(parser) {
                                       "if none specified cwd will be used."),
                                     collapse = " "))
   
-  parser <- add_option(parser,
-                       c('-s','--samples'),
-                       default = c(),
-                       help = paste(c("samples to be used in analysis",
-                                      "if only patient ids and not replicates",
-                                      "are provided all replicates of that patient",
-                                      "will be used"),collapse = " ")
-  )
+  #parser <- add_option(parser,
+  #                     c('-s','--samples'),
+  #                     default = c(),
+  #                     help = paste(c("samples to be used in analysis",
+  #                                    "if only patient ids and not replicates",
+  #                                    "are provided all replicates of that patient",
+  #                                    "will be used"),collapse = " ")
+  #)
   
   parser <- add_option(parser,
                        c("-ft","--filter_tumors"),

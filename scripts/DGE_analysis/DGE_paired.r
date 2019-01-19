@@ -14,10 +14,10 @@ args <- commandArgs(trailingOnly = F)
 scriptPath <- normalizePath(dirname(sub("^--file=", "", args[grep("^--file=", args)])))
 
 # load modules
-source(paste(c(scriptPath,"lib/utils.r"), collapse ="/"))
+#source(paste(c(scriptPath,"lib/utils.r"), collapse ="/"))
 source(paste(c(scriptPath,"lib/designs.r"), collapse ="/"))
 source(paste(c(scriptPath,"lib/parser_paired.r"), collapse ="/"))
-
+source(paste(c(scriptPath,"lib/modOptparse.r"),collapse ="/"))
 
 # Function Space ---------------------------------
 
@@ -43,7 +43,7 @@ banner <- function(){
 }
 
 clean_matrix <- function(mat, remove_ambigious = FALSE,
-                         min_sample = 300 , min_gene = 0.01){
+                         min_sample = 100 , min_gene = 0.01){
   #' Function which returns idices of elements to keep in
   #' provided matrix after filtering.
   #' Matrix should be formatted n_samples x n_genes
@@ -67,6 +67,7 @@ clean_matrix <- function(mat, remove_ambigious = FALSE,
 DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
   #' Perform DESeq2 DGE analysis with prepared matrices
   #' use scran as to avoid error with zero counts
+  
   scran_size_factors <- computeSumFactors(count_matrix, positive = TRUE)
   flog.info("Successfully computed scran size factors")
   # construct SE object for compatibility
@@ -122,7 +123,7 @@ pseudo_replicate <- function(fm) {
   
   ids <- unique(fm[['id']]) #all unique patient id's
   # TODO: change this into zero-vector
-  new <- fm[['replicate']] #copy of current replicates
+  new <- matrix("",dim(fm)[1]) #copy of current replicates
   # iterate over all patients in dataframe
   for (sid in ids) {
     # get all unique replicate id's within patient
@@ -132,7 +133,7 @@ pseudo_replicate <- function(fm) {
     for (r in reps) {
       # assign new replicate id for all replicates with given
       # identifier within a patient
-      new[(fm['id'] == sid) & (fm['replicate'] == r)] = psid
+      new[(fm['id'] == sid) & (fm['replicate'] == r)] = as.character(psid)
       psid = psid + 1
     }
   }
@@ -140,26 +141,24 @@ pseudo_replicate <- function(fm) {
   return(as.factor(new))
 }
 
-generate_matrices <- function(path_feat, path_cnt,samples_feat, samples_cnt,
+generate_matrices <- function(path_feat, path_cnt,
                               filter_tumors = FALSE, remove_ambigious = FALSE) {
   
   #' Returns a list of a concatenated feature matrix and count matrix
   #' Data from single replicates and patients are joined into larger data frame
   
-  # control for consistency of feature and count matrices
-  if (length(samples_feat) != length(samples_cnt)) {
-    warning("Inconsistent number of files provided")
-    exit()
-  }
   
-  count_matrix <- data.frame()
-  feature_matrix <- data.frame()
+  clist <- list()
+  feature_matrix <- data.frame(stringsAsFactors = TRUE)
   
-  # iterate over all filenames
-  for (num in 1:length(samples_feat)) {
-    flog.info(paste(c("Reading file :", samples_feat[num]),collapse = ' '))
+  gene_names <- c()
+  num_spots <- 0
+  
+  for (num in 1:length(path_cnt)) {
+    
+    flog.info(paste(c("Reading feature file :", path_feat[num]),collapse = ' '))
     # load feature file
-    fmat <- read.csv(paste(c(path_feat,samples_feat[num]),collapse="/"), sep = "\t",
+    fmat <- read.csv(path_feat[num], sep = "\t",
                      header = TRUE, row.names = 1, stringsAsFactors = TRUE)
     
     # extract only relevant columns
@@ -171,9 +170,9 @@ generate_matrices <- function(path_feat, path_cnt,samples_feat, samples_cnt,
       fmat <- fmat[fmat['tumor'] == 'tumor',] #remove non-tumor spots
     }
     
-    flog.info(paste(c("Reading file :", samples_cnt[num]),collapse = ' '))
+    flog.info(paste(c("Reading count file :", path_cnt[num]),collapse = ' '))
     # load count-matrix
-    cmat <- read.csv(paste(c(path_cnt,samples_cnt[num]),collapse="/"), sep = "\t",
+    cmat <- read.csv(path_cnt[num], sep = "\t",
                      header = TRUE, row.names = 1)
     
     # find spots present in count and feature file. Set to same order
@@ -181,13 +180,26 @@ generate_matrices <- function(path_feat, path_cnt,samples_feat, samples_cnt,
     cmat <-cmat[inter,]
     fmat <- fmat[inter,]
     
-    # add data to full matrix. bind_rows will add new columns (genes)
-    # if not already present. Sets all instances of these to previous data as NA
-    # if added data does not have any of genes in full matrix, these are set to NA
-    count_matrix <- bind_rows(count_matrix,cmat)
-    feature_matrix <- bind_rows(feature_matrix,fmat)
+    gene_names <- union(gene_names, unlist(colnames(cmat)))
+    num_spots <- num_spots + length(inter)
+    
+    clist <- append(clist, list(cmat))
+    feature_matrix <- rbind(feature_matrix,as.data.frame(fmat))
+    
     
   } 
+  
+  count_matrix <- data.frame(matrix(0, num_spots, length(gene_names)))
+  colnames(count_matrix) <- gene_names
+  pos <- 1
+  
+  for (i in 1:length(path_cnt)) {
+    nsp <- dim(clist[[1]])[1] - 1
+    count_matrix[pos:(pos+ nsp),colnames(clist[[1]])] <- clist[[1]]
+    clist[1] <- NULL
+    pos <- pos + nsp 
+  
+  }
   
   # Rename replicates to obtain linear independent columns in downstream DESeq2 analysis
   feature_matrix['pseudo.replicate'] <- pseudo_replicate(feature_matrix)
@@ -197,6 +209,7 @@ generate_matrices <- function(path_feat, path_cnt,samples_feat, samples_cnt,
   count_matrix <- count_matrix[indices$row_idx,indices$col_idx]
   # sync feature and count matrix after cleanup
   feature_matrix <- feature_matrix[indices$row_idx,]
+  rownames(feature_matrix) <- rownames(count_matrix)
 
   return(list(count_matrix = count_matrix, feature_matrix = feature_matrix))
 }
@@ -205,11 +218,32 @@ generate_matrices <- function(path_feat, path_cnt,samples_feat, samples_cnt,
 
 parser <- OptionParser()
 parser <- make_parser(parser) #  add options, delegated to external function
-args <- parse_args(parser) #  parse arguments
-
+# parse arguments; modified to support multiargs
+args <- splitMultipleArgs(parse_args(parser, args = allowMultipleArgs())) 
 # set logger to write both to stdout and file
 flog.appender(appender.tee(paste(c(args$output_dir,args$logname),collapse="/")),name = "ROOT")
-                     
+flog.info(banner()) #aestethics
+
+# get filenames
+if (length(args$count_file)!=length(args$feature_file)) {
+  flog.warning(paste(c("The number of count files does not match",
+                        "the number of feature files. Exiting"), collapse =" "))
+  exit()
+}
+
+# get full paths to count and feature files
+if (ifelse(length(args$count_file) == 1,(dir.exists(args$count_file) & dir.exists(args$feature_file)),FALSE)) {
+  count_pth <- list.files(args$count_file)
+  feature_pth <- list.files(args$feature_file)
+} else {
+  count_pth <- args$count_file
+  feature_pth <- args$feature_file
+}
+
+
+flog.info(paste(c("count matrix files(s) : ",count_pth ),collapse = "\n"))
+flog.info(paste(c("feature matrix files(s) : ",count_pth ),collapse = "\n"))
+
 # set design to use
 if (args$design < 1 & length(args$custom_design) < 1) {
       # if flag used but no value given (default -1)
@@ -226,38 +260,31 @@ if (args$design < 1 & length(args$custom_design) < 1) {
     design_formula <- as.formula(pre_design_formulas(args$design))
   }
 
+flog.info(paste(c("design formula :", design_formula),collapse =" "))
+
 # Select files for analysis. All files having identifier
 # will be anayzed. If replicate tag is not included
 # all replicates will be analyzed.
-
-if (grepl(',',args$samples)) {
-  # if multiple samples are provided
-  sample_ids <- gsub(' ','',args$samples) # remove potential spacing
-  sample_ids <-unlist(strsplit(sample_ids,',')) # generate list of sample identifiers
-  flog.info("Multiple sample identifiers registered")
-
-  } else {
-  # if single sample
-  flog.info("Single sample registered")
-  sample_ids <- args$samples                    
+#TODO: remove this part once completely obsolete
+if (FALSE) {
+  if (grepl(',',args$samples)) {
+    # if multiple samples are provided
+    sample_ids <- gsub(' ','',args$samples) # remove potential spacing
+    sample_ids <-unlist(strsplit(sample_ids,',')) # generate list of sample identifiers
+    flog.info("Multiple sample identifiers registered")
+  
+    } else {
+    # if single sample
+    flog.info("Single sample registered")
+    sample_ids <- args$samples                    
+  }
 }
-
 # Main Body ---------------------------------
-
-flog.info(banner()) #aestethics
-# get filenames for all feature files and count matrices
-# assumes that files will be read in same order from directories 
-samples_feat <- get_filenames(args$feature_dir,sample_ids) 
-samples_cnt <- get_filenames(args$count_dir,sample_ids)
-
-flog.info("Successfully loaded samples. Assuming naming is consistent between counts and features.")
 
 # generate concatenated (full) feature matrix and count matrix
 # TODO: Evaluate if better to provide full path name for all replicates
-matrices <- generate_matrices(path_feat = args$feature_dir, #  path to feature files directory
-                              path_cnt = args$count_dir, #  path to count matrix files directory
-                              samples_feat = samples_feat, #  feature file names
-                              samples_cnt = samples_cnt, #  count matrices names
+matrices <- generate_matrices(path_feat = args$feature_file, #  path to feature file(s)
+                              path_cnt = args$count_file, #  path to count matrix file(s)
                               remove_ambigious = args$remove_ambigious, #  if to remove ambigiously mapped reads
                               filter_tumors = args$filter_tumors #  if to remove non-tumor spots
                               )

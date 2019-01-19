@@ -4,9 +4,9 @@ pre_design_formulas <- function(dfid) {
     #' available design formulas is printed. Otherwise 
     #' string with chosen design formula will be passed
     
-    f1 <- '~id + id:pseudo.replicate+pseudo.replicate '
-    f2 <- '~tumor+pseudo.replicate:tumor'
-    f3 <- '~id + id:psuedo_replicate + tumor + tumor:pseudo.replicate + tumor:id'
+    f1 <- '~id:pseudo.replicate+pseudo.replicate + id '
+    f2 <- '~pseudo.replicate:tumor + tumor'
+    f3 <- '~id:psuedo_replicate + tumor + tumor:pseudo.replicate + tumor:id + id'
     formulas <- list(f1,f2,f3)
     
     if (dfid >= 1 & dfid <= length(formulas)) {
