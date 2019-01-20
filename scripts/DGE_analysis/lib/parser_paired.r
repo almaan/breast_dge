@@ -131,6 +131,16 @@ make_parser <- function(parser,tag) {
                        ),collapse = " ") 
   )
   
+  parser <- add_option(parser,
+                       c('-v','--volcano'),
+                       default = FALSE,
+                       action = "store_true",
+                       help = paste(c("generate a volcano",
+                                      "plot based on the results",
+                                      "from the analysis."
+                       ),collapse = " ") 
+  )
+  
   return(parser)
 
 }

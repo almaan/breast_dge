@@ -19,8 +19,31 @@ scriptPath <- normalizePath(dirname(sub("^--file=", "", args[grep("^--file=", ar
 source(paste(c(scriptPath,"lib/designs.r"), collapse ="/"))
 source(paste(c(scriptPath,"lib/parser_paired.r"), collapse ="/"))
 source(paste(c(scriptPath,"lib/modOptparse.r"),collapse ="/"))
+source(paste(c(scriptPath,"lib/volcano.r"),collapse ="/"))
 
 # Function Space ---------------------------------
+
+volcano <- function(df, sample_name) {
+  alpha <- 0.05
+  cols <- densCols(df$log2FoldChange, -log10(df$padj))
+  p <- plot(df$log2FoldChange, -log10(df$padj), col=cols, panel.first=grid(),
+       main=sample_name, xlab="Effect size: log2(fold-change)", ylab="-log10(adjusted p-value)",
+       pch=20, cex=0.6)
+  
+  abline(v=0)
+  abline(v=c(-1,1), col="brown")
+  abline(h=-log10(alpha), col="brown")
+  
+  gn.selected <- abs(df$log2FoldChange) > 2.5 & df$padj < alpha 
+  if (sum(gn.selected)) {
+    text(df$log2FoldChange[gn.selected],
+         -log10(df$padj)[gn.selected],
+         lab=df$X[gn.selected ], cex=0.4)
+  }
+  
+  ret
+  
+}
 
 
 get_session_tag <- function() {
@@ -175,7 +198,6 @@ generate_matrices <- function(path_feat,
                      header = TRUE, row.names = 1, stringsAsFactors = TRUE)
     
     # extract only relevant columns
-    #TODO: make these non static
     fmat <- fmat[,c('tumor','id','replicate')]
     
     # if only tumor-annotated spots are to be analyzed
@@ -224,7 +246,7 @@ generate_matrices <- function(path_feat,
   
   }
   
-  # Rename replicates to obtain linear independent columns in downstream DESeq2 analysis
+  # for nesting
   feature_matrix['pseudo.replicate'] <- pseudo_replicate(feature_matrix)
   # clean count matrix
   count_matrix[is.na(count_matrix)] <- 0
@@ -235,7 +257,7 @@ generate_matrices <- function(path_feat,
                              remove_ambigious = remove_ambigious)
   
   count_matrix <- count_matrix[indices$row_idx,indices$col_idx]
-  # sync feature and count matrix after cleanup
+  # sync feature and count matrix
   feature_matrix <- feature_matrix[indices$row_idx,]
   rownames(feature_matrix) <- rownames(count_matrix)
 
@@ -346,4 +368,12 @@ if (args$fancy) {
 
 }
 
-# TODO : Implement volcano plot function print as visualization of results
+if (args$volcano) {
+  flog.info("Generating volcano plot based on results")
+  graphics.off()
+  png(file = paste(c(args$output_dir,paste(c(session_tag,'volcano.png'),collapse='.')),collapse = "/"),
+      width = 400, height = 400, pointsize = 8)
+  try(print(volcano(res[!(is.na(df$padj)),])))
+  dev.off()
+}
+
