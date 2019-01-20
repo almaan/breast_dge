@@ -1,3 +1,4 @@
+#!/usr/bin/Rscript
 sh <- suppressPackageStartupMessages
 
 sh(library(SummarizedExperiment))
@@ -21,6 +22,12 @@ source(paste(c(scriptPath,"lib/modOptparse.r"),collapse ="/"))
 
 # Function Space ---------------------------------
 
+
+get_session_tag <- function() {
+  timestamp <- gsub(pattern = ':| ', replacement = "-", x = as.character(Sys.time())) 
+  return(paste(c('DGE_analysis.',timestamp,'.',round(runif(1)*10e4,0)),collapse = ""))
+}
+
 sym_diff <- function(a,b) { 
   # returns elements of two sets a and b which are 
   # present in one set but not both
@@ -42,25 +49,38 @@ banner <- function(){
   return(txt)
 }
 
-clean_matrix <- function(mat, remove_ambigious = FALSE,
-                         min_sample = 100 , min_gene = 0.01){
-  #' Function which returns idices of elements to keep in
-  #' provided matrix after filtering.
-  #' Matrix should be formatted n_samples x n_genes
-  #' Use remove_ambigious if ambigiously mapped genes
-  #' should be removed
+get_clean_indices <- function(mat, remove_ambigious,
+                         min_per_spot, min_per_gene){
+  
+  #' Returns indices of rows and columns to keep in
+  #' provided count matrix after cleaning specified
+  #' by user. Matrix should be formatted n_samples x n_genes
+  #' 
+  #' param : mat - count_matrix
+  #' param : remove_ambigious - remove all ambigiously mapped genes
+  #' param : min_per_spot : threshold for total spot transcript count
+  #' param : min_per_gene : threshold for avearage gene transcript count
+  #' 
+  #' returns: list with items row_idx and col_idx   
+  
   oldrownames <- rownames(mat)
-  keep_samples <- rowSums(mat) >= min_sample 
-  keep_genes <- colMeans(mat) >= min_gene
+  keep_spots <- rowSums(mat) >= min_per_spot 
+  keep_genes <- colMeans(mat) >= min_per_gene
   
   if (remove_ambigious){
+    
     n_before <- length(keep_genes)
     keep_genes[grepl('.*ambig.*',colnames(mat))] <- FALSE 
     n_after <- sum(keep_genes)
-    flog.info(sprintf("Removed %d ambigious genes out of %d total", (n_before-n_after), n_before))
+   
+     if(n_after != n_before) {
+      flog.info(sprintf("Removed %d ambigious genes out of %d total", (n_before-n_after), n_before))
+      } else {
+      flog.info("No ambigious reads detected. All genes are kept.")
+    }
   }
   
-  return(list(row_idx = keep_samples, col_idx = keep_genes))
+  return(list(row_idx = keep_spots, col_idx = keep_genes))
 }
 
 
@@ -103,16 +123,6 @@ DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
   return(dds)
 }
 
-get_filenames <- function(path, sample_list, pattern = '*.tsv') {
-  #' Returns vector of all matching filenames to specified pattern
-  #' Default pattern set to *.tsv
-  files <- list.files(path,pattern = pattern)
-  samples <- c()
-  for (sample in sample_list) {
-    samples <- c(samples,files[sapply(files, function(x) grepl(sample,x))])
-  }
-  return(samples)
-}
 
 pseudo_replicate <- function(fm) {
   #' Returns vector of new replivate names
@@ -122,27 +132,30 @@ pseudo_replicate <- function(fm) {
   #' n_replicates is number of replicates of one patient.
   
   ids <- unique(fm[['id']]) #all unique patient id's
-  # TODO: change this into zero-vector
   new <- matrix("",dim(fm)[1]) #copy of current replicates
-  # iterate over all patients in dataframe
-  for (sid in ids) {
-    # get all unique replicate id's within patient
+
+    # iterate over all patients in dataframe
+  for (sid in ids) { #  iterate over patient
     reps <- unique(fm[fm['id']== sid,'replicate'])
     psid = 1
-    # iterate over replicate id's
-    for (r in reps) {
-      # assign new replicate id for all replicates with given
-      # identifier within a patient
-      new[(fm['id'] == sid) & (fm['replicate'] == r)] = as.character(psid)
+    for (r in reps) { #  iterate over replicate
+
+      idx <- (fm['id'] == sid) & (fm['replicate'] == r)
+      new[idx] = paste(c(sid,as.character(psid)),collapse=".")
       psid = psid + 1
+    
     }
   }
   # return as factors
   return(as.factor(new))
 }
 
-generate_matrices <- function(path_feat, path_cnt,
-                              filter_tumors = FALSE, remove_ambigious = FALSE) {
+generate_matrices <- function(path_feat,
+                              path_cnt,
+                              min_per_spot,
+                              min_per_gene,
+                              filter_tumors = FALSE,
+                              remove_ambigious = FALSE) {
   
   #' Returns a list of a concatenated feature matrix and count matrix
   #' Data from single replicates and patients are joined into larger data frame
@@ -175,8 +188,18 @@ generate_matrices <- function(path_feat, path_cnt,
     cmat <- read.csv(path_cnt[num], sep = "\t",
                      header = TRUE, row.names = 1)
     
+    
+    if(length(rownames(fmat)) != length(rownames(cmat))) {
+      flog.warn(paste(c("feature matrix and column matrix ",
+                           "conatins different number of entries.",
+                           "Analysis will continue but unexpected results",
+                           "may arise as a consequence of this."
+      ),collapse = " "))
+    }
+    
     # find spots present in count and feature file. Set to same order
     inter <- intersect(rownames(fmat),rownames(cmat))
+    
     cmat <-cmat[inter,]
     fmat <- fmat[inter,]
     
@@ -205,7 +228,12 @@ generate_matrices <- function(path_feat, path_cnt,
   feature_matrix['pseudo.replicate'] <- pseudo_replicate(feature_matrix)
   # clean count matrix
   count_matrix[is.na(count_matrix)] <- 0
-  indices <- clean_matrix(count_matrix, remove_ambigious = remove_ambigious)
+  
+  indices <- get_clean_indices(count_matrix,
+                             min_per_spot = min_per_spot,
+                             min_per_gene = min_per_gene,  
+                             remove_ambigious = remove_ambigious)
+  
   count_matrix <- count_matrix[indices$row_idx,indices$col_idx]
   # sync feature and count matrix after cleanup
   feature_matrix <- feature_matrix[indices$row_idx,]
@@ -216,12 +244,15 @@ generate_matrices <- function(path_feat, path_cnt,
 
 # Parsing ---------------------------------
 
+session_tag <- get_session_tag()
+
 parser <- OptionParser()
-parser <- make_parser(parser) #  add options, delegated to external function
+parser <- make_parser(parser,tag = session_tag) #  add options, delegated to external function
 # parse arguments; modified to support multiargs
 args <- splitMultipleArgs(parse_args(parser, args = allowMultipleArgs())) 
 # set logger to write both to stdout and file
-flog.appender(appender.tee(paste(c(args$output_dir,args$logname),collapse="/")),name = "ROOT")
+flog.appender(appender.tee(paste(c(args$output_dir,args$logname),
+                                 collapse="/")),name = "ROOT")
 flog.info(banner()) #aestethics
 
 # get filenames
@@ -232,7 +263,11 @@ if (length(args$count_file)!=length(args$feature_file)) {
 }
 
 # get full paths to count and feature files
-if (ifelse(length(args$count_file) == 1,(dir.exists(args$count_file) & dir.exists(args$feature_file)),FALSE)) {
+# TODO: make more elegant
+if (ifelse(length(args$count_file) == 1,
+           (dir.exists(args$count_file) & 
+            dir.exists(args$feature_file)),FALSE)) {
+  
   count_pth <- list.files(args$count_file)
   feature_pth <- list.files(args$feature_file)
 } else {
@@ -241,8 +276,8 @@ if (ifelse(length(args$count_file) == 1,(dir.exists(args$count_file) & dir.exist
 }
 
 
-flog.info(paste(c("count matrix files(s) : ",count_pth ),collapse = "\n"))
-flog.info(paste(c("feature matrix files(s) : ",count_pth ),collapse = "\n"))
+flog.info(paste(c("count matrix files(s) used : ",count_pth ),collapse = "\n"))
+flog.info(paste(c("feature matrix files(s) used : ",count_pth ),collapse = "\n"))
 
 # set design to use
 if (args$design < 1 & length(args$custom_design) < 1) {
@@ -253,40 +288,22 @@ if (args$design < 1 & length(args$custom_design) < 1) {
       
   } else if (length(args$custom_design) >= 1) {
     # if a custom designed is provided 
-    # will have presedence over design_formula flag 
     design_formula <- as.formula(args$custom_design)
   } else {
-    # if design_formula with index of pre-constructed formula is given
     design_formula <- as.formula(pre_design_formulas(args$design))
   }
 
 flog.info(paste(c("design formula :", design_formula),collapse =" "))
 
-# Select files for analysis. All files having identifier
-# will be anayzed. If replicate tag is not included
-# all replicates will be analyzed.
-#TODO: remove this part once completely obsolete
-if (FALSE) {
-  if (grepl(',',args$samples)) {
-    # if multiple samples are provided
-    sample_ids <- gsub(' ','',args$samples) # remove potential spacing
-    sample_ids <-unlist(strsplit(sample_ids,',')) # generate list of sample identifiers
-    flog.info("Multiple sample identifiers registered")
-  
-    } else {
-    # if single sample
-    flog.info("Single sample registered")
-    sample_ids <- args$samples                    
-  }
-}
 # Main Body ---------------------------------
 
 # generate concatenated (full) feature matrix and count matrix
-# TODO: Evaluate if better to provide full path name for all replicates
-matrices <- generate_matrices(path_feat = args$feature_file, #  path to feature file(s)
-                              path_cnt = args$count_file, #  path to count matrix file(s)
-                              remove_ambigious = args$remove_ambigious, #  if to remove ambigiously mapped reads
-                              filter_tumors = args$filter_tumors #  if to remove non-tumor spots
+matrices <- generate_matrices(path_feat = args$feature_file, 
+                              path_cnt = args$count_file,
+                              min_per_spot = args$min_per_spot,
+                              min_per_gene = args$min_per_gene, 
+                              remove_ambigious = args$remove_ambigious, 
+                              filter_tumors = args$filter_tumors 
                               )
 
 flog.info("Successfully generated joint feature and count matrices")
@@ -294,7 +311,6 @@ flog.info("Initiate DESeq2")
 
 # initate DESeq2 with generated matrices and provided design formula
 dds <- DESeq_pipline(t(matrices$count_matrix), matrices$feature_matrix,design_formula)
-# extract results from dds object
 results_dds <- results(dds)
 
 remove(matrices) #  release memory
@@ -302,19 +318,17 @@ flog.info(paste(c("Successfully Completed DESeq2 analysis. Saving Output to file
 
 # Save Results ---------------------------------
 
-# generate string containg all included samples connected with underscore. Used for output-file names
-sample_tag <- ifelse(grepl(',',args$samples),gsub(',','_',args$samples), args$samples)
-# make data frame copy from results object to save result
 res <- data.frame(results_dds)
-#save full results in tsv file
-# TODO: add separator argument, currently csv and not tsv despite extension
-try(write.csv(res, file = paste(c(args$output_dir,paste(c(sample_tag,'tsv'),collapse='.')), collapse = "/")))
-# if paranoid mode on
+
+try(write.csv(res, file = paste(c(args$output_dir,paste(c(session_tag,'tsv'),collapse='.')),
+                                                              collapse = "/"), sep = "\t"))
+
+
 if (args$paranoid) {
-  # save results_dds R object. Can be reloaded later.
-  try(save(results_dds, file = paste(c(args$output_dir,paste(c('res',sample_tag,'r'),collapse='.')), collapse = "/")))
-  # save dds R object. Can be reloaded later.
-  try(save(dds, file = paste(c(args$output_dir,paste(c('dds',sample_tag,'r'),collapse='.')), collapse = "/")))
+  try(save(results_dds, file = paste(c(args$output_dir,paste(c('res',session_tag,'r'),
+                                                      collapse='.')),collapse = "/")))
+  try(save(dds, file = paste(c(args$output_dir,paste(c('dds',session_tag,'r'),
+                                              collapse='.')), collapse = "/")))
 }
 
 # if fancy output is to be produced as well
@@ -324,12 +338,11 @@ if (args$fancy) {
   # select for genes with padj equal or less to specifed value
   topnres <- res[res$padj <= args$pval & !(is.na(res$padj)),]
   # include gene symbols in output
-  # TODO: comsider allowing to provide conversion target id type
   topnres$symbol <-mapIds(org.Hs.eg.db, keys=rownames(topnres),
                             column="SYMBOL", keytype="ENSEMBL", multiVals="first")
   
-  try(write.csv(topnres, file = paste(c(args$output_dir,paste(c(sample_tag,'fancy.tsv'),collapse='.')),
-                                      collapse = "/")))
+  try(write.csv(topnres, file = paste(c(args$output_dir,paste(c(session_tag,'fancy.tsv'),collapse='.')),
+                                      collapse = "/"), sep = "\t"))
 
 }
 

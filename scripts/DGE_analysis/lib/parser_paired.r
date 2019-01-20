@@ -1,11 +1,7 @@
 library(optparse)
 
-log_name <- function() {
-  timestamp <- gsub(pattern = ':| ', replacement = "-", x = as.character(Sys.time())) 
-  return(paste(c('DGE_analysis.',timestamp,'.',runif(1),".log"),collapse = ""))
-}
 
-make_parser <- function(parser) {
+make_parser <- function(parser,tag) {
   
   
   parser <- add_option(parser,
@@ -38,15 +34,6 @@ make_parser <- function(parser) {
                        help = paste(c("directory to save output into.",
                                       "if none specified cwd will be used."),
                                     collapse = " "))
-  
-  #parser <- add_option(parser,
-  #                     c('-s','--samples'),
-  #                     default = c(),
-  #                     help = paste(c("samples to be used in analysis",
-  #                                    "if only patient ids and not replicates",
-  #                                    "are provided all replicates of that patient",
-  #                                    "will be used"),collapse = " ")
-  #)
   
   parser <- add_option(parser,
                        c("-ft","--filter_tumors"),
@@ -88,7 +75,7 @@ make_parser <- function(parser) {
   
   parser <- add_option(parser,
                        c("-l", "--logname"),
-                       default = log_name(),
+                       default = paste(c(tag,".log"),collapse=""),
                        help = paste(c("full name of where to write",
                                       "log file. If none specified default",
                                       "with date and timestamp will be used"),collapse = " ")
@@ -120,6 +107,28 @@ make_parser <- function(parser) {
                        help = paste(c("Include if Gene Symbols",
                                       "for top n-genes should be",
                                       "included in ouput"),collapse = " ") 
+  )
+  
+  parser <- add_option(parser,
+                       c('-mps','--min_per_spot'),
+                       default = 20,
+                       help = paste(c("Threshold for number",
+                                      "of transcripts required",
+                                      "to be present within a spot",
+                                      "in order to keep this in analysis.",
+                                      "Set to zero to keep all spots"
+                                      ),collapse = " ") 
+  )
+  
+  parser <- add_option(parser,
+                       c('-mpg','--min_per_gene'),
+                       default = 0.01,
+                       help = paste(c("Threshold for number",
+                                      "of transcripts required",
+                                      "to have been mapped to a gene",
+                                      "in order to keep this in analysis.",
+                                      "Set to zero to keep all spots"
+                       ),collapse = " ") 
   )
   
   return(parser)
