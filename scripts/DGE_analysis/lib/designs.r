@@ -4,23 +4,29 @@ pre_design_formulas <- function(dfid) {
     #' available design formulas is printed. Otherwise 
     #' string with chosen design formula will be passed
     
-    f1 <- '~id:pseudo.replicate+pseudo.replicate + id '
-    f2 <- '~pseudo.replicate:tumor + tumor'
-    f3 <- '~id:psuedo_replicate + tumor + tumor:pseudo.replicate + tumor:id + id'
-    formulas <- list(f1,f2,f3)
+    formulas <- list()
+    contrasts <- list()
+  
+    formulas <- append(formulas,list('~pseudo.id:pseudo.replicate+pseudo.replicate + num.id '))
+    contrasts <- append(contrasts,list(c('num.id',"P1","P2")))
+    formulas <- append(formulas,list('~pseudo.replicate:tumor + tumor'))
+    contrasts <- append(contrasts,list(c("tumor","tumor","non")))
+    formulas <- append(formulas,list('~pseudo.id:pseudo_replicate + tumor + tumor:pseudo.replicate + tumor:pseudo.id + pseudo.id'))
+    contrasts <- append(contrasts,list(c("num.id","P1","P2")))
+    
     
     if (dfid >= 1 & dfid <= length(formulas)) {
-        out <- formulas[[dfid]]
+        out <- list(design = formulas[[dfid]], contrast = contrasts[[dfid]])
 
     }  else {
-        help_text <- paste(c(" 1.", f1,
+        help_text <- paste(c(" 1.", formulas[[1]],
                               "\n Compare between different samples accounting",
                               "for replicate differences. Assumes that only one type",
                               "of spots are present (tumor or non-tumor\n",
-                              "2.", f2,
+                              "2.", formulas[[2]],
                               "\n Compare tumor vs. non-tumor within one",
-                              "patient accounting for replicate differences",
-                              "3.", f3,
+                              "patient accounting for replicate differences\n",
+                              "3.", formulas[[3]],
                               "\n Compare between patients and control for replicate",
                              "as well as tumor\n"
                         ), collapse = " ")

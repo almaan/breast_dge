@@ -7,7 +7,7 @@ sh(library(ggplot2))
 sh(library(scran))
 sh(library(stringr))
 sh(library(optparse))
-sh(library(dplyr))
+sh(library(plyr))
 sh(library(futile.logger))
 
 # get script path for library load
@@ -22,29 +22,6 @@ source(paste(c(scriptPath,"lib/modOptparse.r"),collapse ="/"))
 source(paste(c(scriptPath,"lib/volcano.r"),collapse ="/"))
 
 # Function Space ---------------------------------
-
-volcano <- function(df, sample_name) {
-  alpha <- 0.05
-  cols <- densCols(df$log2FoldChange, -log10(df$padj))
-  p <- plot(df$log2FoldChange, -log10(df$padj), col=cols, panel.first=grid(),
-       main=sample_name, xlab="Effect size: log2(fold-change)", ylab="-log10(adjusted p-value)",
-       pch=20, cex=0.6)
-  
-  abline(v=0)
-  abline(v=c(-1,1), col="brown")
-  abline(h=-log10(alpha), col="brown")
-  
-  gn.selected <- abs(df$log2FoldChange) > 2.5 & df$padj < alpha 
-  if (sum(gn.selected)) {
-    text(df$log2FoldChange[gn.selected],
-         -log10(df$padj)[gn.selected],
-         lab=df$X[gn.selected ], cex=0.4)
-  }
-  
-  ret
-  
-}
-
 
 get_session_tag <- function() {
   timestamp <- gsub(pattern = ':| ', replacement = "-", x = as.character(Sys.time())) 
@@ -111,8 +88,9 @@ DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
   #' Perform DESeq2 DGE analysis with prepared matrices
   #' use scran as to avoid error with zero counts
   
-  scran_size_factors <- computeSumFactors(count_matrix, positive = TRUE)
-  flog.info("Successfully computed scran size factors")
+  #size_factors <- computeSumFactors(count_matrix, positive = TRUE)
+  #flog.info("Successfully computed scran size factors")
+  #size_factors <- GMPR(count_matrix)
   # construct SE object for compatibility
   se <- SummarizedExperiment(assays = list(counts = count_matrix), colData = feature_matrix)
   flog.debug("Summarized Experiment object generated")
@@ -131,52 +109,27 @@ DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
   }
   
   # generate a DESeqDataSet object from Summarized Experiment Object
-  dds <- DESeqDataSet(se,design = design_formula)
+  dds <- DESeqDataSet(se, design = design_formula)
   flog.debug("Successfully prepared DESeq Dataset")
-  sizeFactors(dds) <- scran_size_factors
+  #sizeFactors(dds) <- size_factors
   
   # relevel tumor factors as to always contrast
   # tumor to non-tumor
-  if ('tumor' %in% colnames(feature_matrix)) {
-    dds$tumor <- relevel(dds$tumor, "non")
-  flog.info('releveled tumor as to contraste against "non"')
+  if (any('tumor' == colnames(feature_matrix))) {
+    try(dds$tumor <- relevel(dds$tumor, "non"))
+    flog.info('releveled tumor as to contraste against "non"')
   }
   # perform DESeq-analysis
-  dds<-DESeq(dds, full = mm)
+  dds<-DESeq(dds, full = mm, sfType = 'poscounts',  minmu = 1e-6)
   return(dds)
 }
 
-
-pseudo_replicate <- function(fm) {
-  #' Returns vector of new replivate names
-  #' DESeq2 requires that columns are linearly independent
-  #' in design matrix. Each replicate identifier will be 
-  #' assignes a numeric value from 1:n_replicates. 
-  #' n_replicates is number of replicates of one patient.
-  
-  ids <- unique(fm[['id']]) #all unique patient id's
-  new <- matrix("",dim(fm)[1]) #copy of current replicates
-
-    # iterate over all patients in dataframe
-  for (sid in ids) { #  iterate over patient
-    reps <- unique(fm[fm['id']== sid,'replicate'])
-    psid = 1
-    for (r in reps) { #  iterate over replicate
-
-      idx <- (fm['id'] == sid) & (fm['replicate'] == r)
-      new[idx] = paste(c(sid,as.character(psid)),collapse=".")
-      psid = psid + 1
-    
-    }
-  }
-  # return as factors
-  return(as.factor(new))
-}
 
 generate_matrices <- function(path_feat,
                               path_cnt,
                               min_per_spot,
                               min_per_gene,
+                              design_formula,
                               filter_tumors = FALSE,
                               remove_ambigious = FALSE) {
   
@@ -187,9 +140,12 @@ generate_matrices <- function(path_feat,
   clist <- list()
   feature_matrix <- data.frame(stringsAsFactors = TRUE)
   
+  patient_names <- c("")
   gene_names <- c()
-  num_spots <- 0
   
+  num_spots <- 0
+  num_patient <- 0  
+    
   for (num in 1:length(path_cnt)) {
     
     flog.info(paste(c("Reading feature file :", path_feat[num]),collapse = ' '))
@@ -198,8 +154,22 @@ generate_matrices <- function(path_feat,
                      header = TRUE, row.names = 1, stringsAsFactors = TRUE)
     
     # extract only relevant columns
-    fmat <- fmat[,c('tumor','id','replicate')]
+    fmat <- fmat[,union(c("id","replicate"),as.vector(sapply(all.vars(design_formula), function(x) gsub("pseudo.","",x))))]
     
+    uni.patient <- unique(fmat['id'])
+    if (length(uni.patient) > 1) {
+      flog.warn("More than one section in feature file. Not supported. Exiting.")
+      exit()
+    }
+    
+    if (!grepl(uni.patient,patient_names)) {
+        num_patient <- num_patient + 1
+        patient_names <- c(patient_names,uni.patient)
+    }
+    
+    pseudo.id <- paste(c("P",num_patient),collapse ="")
+    fmat['pseudo.id'] <- pseudo.id
+        
     # if only tumor-annotated spots are to be analyzed
     if (filter_tumors) {
       fmat <- fmat[fmat['tumor'] == 'tumor',] #remove non-tumor spots
@@ -217,15 +187,20 @@ generate_matrices <- function(path_feat,
                            "Analysis will continue but unexpected results",
                            "may arise as a consequence of this."
       ),collapse = " "))
+      
+      
     }
     
     # find spots present in count and feature file. Set to same order
     inter <- intersect(rownames(fmat),rownames(cmat))
+    #uni.rep <- unique(feature_matrix['replicate'])
+    #feature_matrix['pseudo.replicate'] = mapvalues(feature_matrix['replicate'], uni.rep, sapply(1:length(uni.rep),
+    #                                                            function(x) paste(c(pseudo.id,num),collapse =".")))
     
     cmat <-cmat[inter,]
     fmat <- fmat[inter,]
     
-    gene_names <- union(gene_names, unlist(colnames(cmat)))
+    gene_names <- union(gene_names, unlist(colnames(cmat))) # union to avoid duplicate
     num_spots <- num_spots + length(inter)
     
     clist <- append(clist, list(cmat))
@@ -234,23 +209,21 @@ generate_matrices <- function(path_feat,
     
   } 
   
+  feature_matrix['pseudo.replicate'] <- paste(feature_matrix$pseudo.id,feature_matrix$replicate,sep=".")
+  
+  # Assemble full count matrix --------
   count_matrix <- data.frame(matrix(0, num_spots, length(gene_names)))
   colnames(count_matrix) <- gene_names
-  pos <- 1
   
+  row.start <- 1
   for (i in 1:length(path_cnt)) {
-    nsp <- dim(clist[[1]])[1] - 1
-    count_matrix[pos:(pos+ nsp),colnames(clist[[1]])] <- clist[[1]]
-    clist[1] <- NULL
-    pos <- pos + nsp 
-  
+    add.n.rows <- dim(clist[[1]])[1] - 1 #  subtraction to not overcount
+    count_matrix[row.start:(row.start+ add.n.rows),colnames(clist[[1]])] <- clist[[1]] # fill interval in count matrix
+    clist[1] <- NULL #  dequeue matrix
+    row.start <- row.start + add.n.rows #  move to blank row in count_matrix  
   }
   
-  # for nesting
-  feature_matrix['pseudo.replicate'] <- pseudo_replicate(feature_matrix)
-  # clean count matrix
   count_matrix[is.na(count_matrix)] <- 0
-  
   indices <- get_clean_indices(count_matrix,
                              min_per_spot = min_per_spot,
                              min_per_gene = min_per_gene,  
@@ -311,19 +284,25 @@ if (args$design < 1 & length(args$custom_design) < 1) {
   } else if (length(args$custom_design) >= 1) {
     # if a custom designed is provided 
     design_formula <- as.formula(args$custom_design)
+    contrast <- args$contrast
   } else {
-    design_formula <- as.formula(pre_design_formulas(args$design))
+    pre_expression <- pre_design_formulas(args$design)
+    design_formula <- as.formula(pre_expression$design)
+    contrast <- pre_expression$contrast
   }
 
 flog.info(paste(c("design formula :", design_formula),collapse =" "))
-
+if (!is.null(contrast)) {
+  flog.info(paste(c("contrast triple :", paste(contrast,collapse =" ")),collapse =" "))
+}
 # Main Body ---------------------------------
 
 # generate concatenated (full) feature matrix and count matrix
 matrices <- generate_matrices(path_feat = args$feature_file, 
                               path_cnt = args$count_file,
                               min_per_spot = args$min_per_spot,
-                              min_per_gene = args$min_per_gene, 
+                              min_per_gene = args$min_per_gene,
+                              design_formula = design_formula,
                               remove_ambigious = args$remove_ambigious, 
                               filter_tumors = args$filter_tumors 
                               )
@@ -333,7 +312,13 @@ flog.info("Initiate DESeq2")
 
 # initate DESeq2 with generated matrices and provided design formula
 dds <- DESeq_pipline(t(matrices$count_matrix), matrices$feature_matrix,design_formula)
+
 results_dds <- results(dds)
+
+if (!is.null(contrast)) {
+  try(results_dds <-  lfcShrink(dds,results_dds,contrast = contrast))  
+}
+
 
 remove(matrices) #  release memory
 flog.info(paste(c("Successfully Completed DESeq2 analysis. Saving Output to files")))

@@ -56,6 +56,17 @@ make_parser <- function(parser,tag) {
   )
   
   parser <- add_option(parser,
+                       c('-cr','--contrast'),
+                       default = NULL,
+                       help = paste(c("contrast to to use in DESeq analysis.",
+                                      'must be on form "factor" "nominator"', 
+                                      '"denominator"',
+                                      "if a pre-defined design formula",
+                                      "is used this will be ignored."
+                       ),collapse = " ") 
+  )
+  
+  parser <- add_option(parser,
                        c("-cd","--custom_design"),
                        default = NULL,
                        help =paste(c("choose from available design formulas",
