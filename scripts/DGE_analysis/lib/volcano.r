@@ -1,13 +1,11 @@
 library(ggplot2)
 library(latex2exp)
 
-volcano <- function(deseq_res, title) {
+volcano_plot <- function(deseq_res, title = NULL) {
   alpha <- 0.05
-  cols <- densCols(df$log2FoldChange, -log10(df$padj))
+  cols <- densCols(deseq_res$log2FoldChange, -log10(deseq_res$padj))
   p.size <- abs(deseq_res$log2FoldChange)
   p.size <- 3*p.size/max(p.size)
-  
-  print(p.size)
   
   plot.obj <- ggplot(deseq_res, aes(x = deseq_res$log2FoldChange, y = -log10(deseq_res$padj))) + 
               geom_point(aes(color = -log10(deseq_res$padj)), size = p.size) + 

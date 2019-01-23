@@ -76,6 +76,26 @@ make_parser <- function(parser,tag) {
   )
   
   parser <- add_option(parser,
+                       c("-ssn","--subsample_number"),
+                       default = 0,
+                       type = "integer",
+                       help =paste(c("integer giving the number of samples which", 
+                                     "should be taken from each section provided",
+                                     "the ratio between variables of the feature",
+                                     "will be kept equal to the full set."),
+                                   collapse = " ")
+  )
+  
+  parser <- add_option(parser,
+                       c("-ssf","--subsample_feature"),
+                       default = "tumor",
+                       type = "character",
+                       help =paste(c("name of feature which subsampling",
+                                     "should be performed w.r.t."),
+                                   collapse = " ")
+  )
+  
+  parser <- add_option(parser,
                        c("-a", "--remove_ambigious"),
                        default = FALSE,
                        action = "store_true",
@@ -133,7 +153,7 @@ make_parser <- function(parser,tag) {
   
   parser <- add_option(parser,
                        c('-mpg','--min_per_gene'),
-                       default = 0.01,
+                       default = 0.0,
                        help = paste(c("Threshold for number",
                                       "of transcripts required",
                                       "to have been mapped to a gene",

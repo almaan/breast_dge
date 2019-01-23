@@ -49,6 +49,23 @@ banner <- function(){
   return(txt)
 }
 
+subsample_w_preserved_ratio <- function(labels, n_samples) {
+  
+  n_elements <- ceiling(table(labels)/sum(table(labels)) * n_samples)
+  var.names <- names(n_elements)
+  
+  while(sum(n_elements) > n_samples) {
+    n_elements[which.max(n_elements)] <- n_elements[which.max(n_elements)] - 1  
+  }
+  
+  idx_keep <- c()
+  for (var in var.names) {
+    tidx <- which(labels == var)
+    idx_keep <- c(idx_keep, sample(tidx,n_elements[[var]]))
+  }
+  return(idx_keep)
+}
+
 get_clean_indices <- function(mat, remove_ambigious,
                          min_per_spot, min_per_gene){
   
@@ -69,7 +86,7 @@ get_clean_indices <- function(mat, remove_ambigious,
   
   if (remove_ambigious){
     
-    n_before <- length(keep_genes)
+    n_before <- sum(keep_genes)
     keep_genes[grepl('.*ambig.*',colnames(mat))] <- FALSE 
     n_after <- sum(keep_genes)
    
@@ -95,18 +112,6 @@ DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
   se <- SummarizedExperiment(assays = list(counts = count_matrix), colData = feature_matrix)
   flog.debug("Summarized Experiment object generated")
   
-  # construct model matrix using specified design formulae
-  mm <- model.matrix(design_formula, colData(se))
-  # identify elements where no interaction (all zero) are present
-  all.zero <- apply(mm, 2, function(x) all(x==0))
-  # get indices for zero columns
-  zidx <- which(all.zero)
-  
-  if (length(zidx) > 0) {
-    # if any zero columns, remove these for linear independency
-    # recommended procedure by Love
-    mm <- mm[,-zidx]
-  }
   
   # generate a DESeqDataSet object from Summarized Experiment Object
   dds <- DESeqDataSet(se, design = design_formula)
@@ -117,10 +122,11 @@ DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
   # tumor to non-tumor
   if (any('tumor' == colnames(feature_matrix))) {
     try(dds$tumor <- relevel(dds$tumor, "non"))
-    flog.info('releveled tumor as to contraste against "non"')
+    flog.info('releveled tumor as to contrast against "non"')
   }
   # perform DESeq-analysis
-  dds<-DESeq(dds, full = mm, sfType = 'poscounts',  minmu = 1e-6)
+  dds<-DESeq(dds, sfType = 'poscounts',  minmu = 1e-6)
+  
   return(dds)
 }
 
@@ -129,7 +135,9 @@ generate_matrices <- function(path_feat,
                               path_cnt,
                               min_per_spot,
                               min_per_gene,
-                              design_formula,
+                              ss_number,
+                              ss_feature,
+                              keep_cols,
                               filter_tumors = FALSE,
                               remove_ambigious = FALSE) {
   
@@ -154,7 +162,7 @@ generate_matrices <- function(path_feat,
                      header = TRUE, row.names = 1, stringsAsFactors = TRUE)
     
     # extract only relevant columns
-    fmat <- fmat[,union(c("id","replicate"),as.vector(sapply(all.vars(design_formula), function(x) gsub("pseudo.","",x))))]
+    fmat <- fmat[,union(c("id","replicate"),keep_cols)]
     
     uni.patient <- unique(fmat['id'])
     if (length(uni.patient) > 1) {
@@ -162,7 +170,7 @@ generate_matrices <- function(path_feat,
       exit()
     }
     
-    if (!grepl(uni.patient,patient_names)) {
+    if (!any(grepl(uni.patient,patient_names))) {
         num_patient <- num_patient + 1
         patient_names <- c(patient_names,uni.patient)
     }
@@ -175,13 +183,17 @@ generate_matrices <- function(path_feat,
       fmat <- fmat[fmat['tumor'] == 'tumor',] #remove non-tumor spots
     }
     
+    if (ss_number > 0) {
+      fmat <- fmat[subsample_w_preserved_ratio(labels = fmat[[ss_feature]], n_samples = ss_number),]
+    }
+    
     flog.info(paste(c("Reading count file :", path_cnt[num]),collapse = ' '))
     # load count-matrix
     cmat <- read.csv(path_cnt[num], sep = "\t",
                      header = TRUE, row.names = 1)
     
     
-    if(length(rownames(fmat)) != length(rownames(cmat))) {
+    if(length(rownames(fmat)) != length(rownames(cmat)) & ss_number == 0) {
       flog.warn(paste(c("feature matrix and column matrix ",
                            "conatins different number of entries.",
                            "Analysis will continue but unexpected results",
@@ -250,6 +262,8 @@ flog.appender(appender.tee(paste(c(args$output_dir,args$logname),
                                  collapse="/")),name = "ROOT")
 flog.info(banner()) #aestethics
 
+flog.info(paste(c("Command line arguments :", paste(args,collapse=" ")), collapse = "\n"))
+
 # get filenames
 if (length(args$count_file)!=length(args$feature_file)) {
   flog.warning(paste(c("The number of count files does not match",
@@ -271,8 +285,17 @@ if (ifelse(length(args$count_file) == 1,
 }
 
 
+# information for logging
 flog.info(paste(c("count matrix files(s) used : ",count_pth ),collapse = "\n"))
 flog.info(paste(c("feature matrix files(s) used : ",count_pth ),collapse = "\n"))
+flog.info(paste(c("Removing genes with lower than", args$min_per_gene,"average transcripts"),collapse=" "))
+flog.info(paste(c("Removing spots with less than", args$min_per_spot,"total transcripts")),collapse=" ")
+
+if (args$subsample_number > 0) {
+  flog.info(sprintf("Will subsample data taking %d spots from each section w.r.t to feature %s",
+                    args$subsample_number, args$subsample_feature))  
+}
+
 
 # set design to use
 if (args$design < 1 & length(args$custom_design) < 1) {
@@ -283,6 +306,8 @@ if (args$design < 1 & length(args$custom_design) < 1) {
       
   } else if (length(args$custom_design) >= 1) {
     # if a custom designed is provided 
+    args$custom_design <- gsub("replicate","pseudo.replicate", args$custom_design)
+    args$custom_design <- gsub("id","pseudo.id", args$custom_design)
     design_formula <- as.formula(args$custom_design)
     contrast <- args$contrast
   } else {
@@ -291,18 +316,23 @@ if (args$design < 1 & length(args$custom_design) < 1) {
     contrast <- pre_expression$contrast
   }
 
+
 flog.info(paste(c("design formula :", design_formula),collapse =" "))
 if (!is.null(contrast)) {
   flog.info(paste(c("contrast triple :", paste(contrast,collapse =" ")),collapse =" "))
 }
 # Main Body ---------------------------------
 
+keep_cols <- as.vector(sapply(all.vars(design_formula), function(x) gsub("pseudo.","",x)))
+
 # generate concatenated (full) feature matrix and count matrix
 matrices <- generate_matrices(path_feat = args$feature_file, 
                               path_cnt = args$count_file,
                               min_per_spot = args$min_per_spot,
                               min_per_gene = args$min_per_gene,
-                              design_formula = design_formula,
+                              keep_cols = keep_cols,
+                              ss_number = args$subsample_number,
+                              ss_feature = args$subsample_feature,
                               remove_ambigious = args$remove_ambigious, 
                               filter_tumors = args$filter_tumors 
                               )
@@ -313,10 +343,13 @@ flog.info("Initiate DESeq2")
 # initate DESeq2 with generated matrices and provided design formula
 dds <- DESeq_pipline(t(matrices$count_matrix), matrices$feature_matrix,design_formula)
 
-results_dds <- results(dds)
+
 
 if (!is.null(contrast)) {
-  try(results_dds <-  lfcShrink(dds,results_dds,contrast = contrast))  
+  results_dds <- results(dds, contrast = contrast, minmu = 10e-6)
+  try(results_dds <-  lfcShrink(dds,res = results_dds,contrast = contrast))  
+} else {
+  reults_dds <- results(dds)
 }
 
 
@@ -328,7 +361,7 @@ flog.info(paste(c("Successfully Completed DESeq2 analysis. Saving Output to file
 res <- data.frame(results_dds)
 
 try(write.csv(res, file = paste(c(args$output_dir,paste(c(session_tag,'tsv'),collapse='.')),
-                                                              collapse = "/"), sep = "\t"))
+                                                              collapse = "/")))
 
 
 if (args$paranoid) {
@@ -349,16 +382,13 @@ if (args$fancy) {
                             column="SYMBOL", keytype="ENSEMBL", multiVals="first")
   
   try(write.csv(topnres, file = paste(c(args$output_dir,paste(c(session_tag,'fancy.tsv'),collapse='.')),
-                                      collapse = "/"), sep = "\t"))
+                                      collapse = "/")))
 
 }
 
 if (args$volcano) {
-  flog.info("Generating volcano plot based on results")
-  graphics.off()
-  png(file = paste(c(args$output_dir,paste(c(session_tag,'volcano.png'),collapse='.')),collapse = "/"),
-      width = 400, height = 400, pointsize = 8)
-  try(print(volcano(res[!(is.na(df$padj)),])))
-  dev.off()
+  volcano.plot <- volcano_plot(res[!is.na(res$padj),])
+  try(ggsave(filename = paste(c(args$output_dir,paste(c(session_tag,'volcano.png'),collapse='.')),collapse = "/"), volcano.plot))
+  flog.info("Saved volcano plot based on results")
 }
 
