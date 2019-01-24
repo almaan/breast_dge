@@ -248,7 +248,7 @@ generate_matrices <- function(path_feat,
   
   # remove potential NA and 
   if(any(is.na(count_matrix))) {
-    flog.warning("Count Matrix contains NA elements. These are set to zero")
+    flog.warn("Count Matrix contains NA elements. These are set to zero")
     count_matrix[is.na(count_matrix)] <- 0
   }
   # get indices for "cleaned" matrix
@@ -283,7 +283,7 @@ flog.info(paste(c("Command line arguments :", paste(args,collapse=" ")), collaps
 
 # get filenames
 if (length(args$count_file)!=length(args$feature_file)) {
-  flog.warning(paste(c("The number of count files does not match",
+  flog.warn(paste(c("The number of count files does not match",
                         "the number of feature files. Exiting"), collapse =" "))
   exit()
 }
@@ -304,7 +304,7 @@ if (ifelse(length(args$count_file) == 1,
 
 # information for logging
 flog.info(paste(c("count matrix files(s) used : ",count_pth ),collapse = "\n"))
-flog.info(paste(c("feature matrix files(s) used : ",count_pth ),collapse = "\n"))
+flog.info(paste(c("feature matrix files(s) used : ",feature_pth ),collapse = "\n"))
 flog.info(paste(c("Removing genes with lower than", args$min_per_gene,"average transcripts"),collapse=" "))
 flog.info(paste(c("Removing spots with less than", args$min_per_spot,"total transcripts")),collapse=" ")
 
