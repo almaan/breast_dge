@@ -50,19 +50,33 @@ banner <- function(){
 }
 
 subsample_w_preserved_ratio <- function(labels, n_samples) {
-  
-  n_elements <- ceiling(table(labels)/sum(table(labels)) * n_samples)
+  #' Allows for subsamplic of labels where the ratio between
+  #' the different labels are kept to the best extent, meaning
+  #' that having at least one occurance of all present labels 
+  #' will be favored over having a ratio more similar to the 
+  #' original.
+  #' 
+  #' param : labels - a Nx1 vector of labels for N samples
+  #' param : n_samples - number of samples to draw 
+  #' 
+  #' returns : idx_keep - numerical indices of those samples 
+  #' to keep. Index refers back to orignal label order.
+   
+  # get number of indices to draw from each label
+  n_elements <- ceiling(table(labels)/sum(table(labels)) * n_samples) #  ceiling used to avoid rounding to zero
   var.names <- names(n_elements)
   
+  # Adjust if total number of labels exceed specified
   while(sum(n_elements) > n_samples) {
     n_elements[which.max(n_elements)] <- n_elements[which.max(n_elements)] - 1  
   }
   
+  # sample indices to keep from respective label
   idx_keep <- c()
   for (var in var.names) {
-    tidx <- which(labels == var)
-    idx_keep <- c(idx_keep, sample(tidx,n_elements[[var]]))
+    idx_keep <- c(which(labels == var), sample(tidx,n_elements[[var]])) #  use which to keep original index reference
   }
+  
   return(idx_keep)
 }
 
@@ -103,11 +117,7 @@ get_clean_indices <- function(mat, remove_ambigious,
 
 DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
   #' Perform DESeq2 DGE analysis with prepared matrices
-  #' use scran as to avoid error with zero counts
   
-  #size_factors <- computeSumFactors(count_matrix, positive = TRUE)
-  #flog.info("Successfully computed scran size factors")
-  #size_factors <- GMPR(count_matrix)
   # construct SE object for compatibility
   se <- SummarizedExperiment(assays = list(counts = count_matrix), colData = feature_matrix)
   flog.debug("Summarized Experiment object generated")
@@ -116,16 +126,20 @@ DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
   # generate a DESeqDataSet object from Summarized Experiment Object
   dds <- DESeqDataSet(se, design = design_formula)
   flog.debug("Successfully prepared DESeq Dataset")
-  #sizeFactors(dds) <- size_factors
   
-  # relevel tumor factors as to always contrast
-  # tumor to non-tumor
+  # relevel tumor factors as to contrast tumor to non-tumor
   if (any('tumor' == colnames(feature_matrix))) {
     try(dds$tumor <- relevel(dds$tumor, "non"))
     flog.info('releveled tumor as to contrast against "non"')
   }
   # perform DESeq-analysis
-  dds<-DESeq(dds, sfType = 'poscounts',  minmu = 1e-6)
+  dds<-DESeq(dds, 
+             sfType = 'poscounts', # to handle zero counts 
+             minmu = 1e-6, #  recommended for SC analysis
+             test = 'LRT', #  recommended for SC analysis, Likelihood Ratio Test
+             useT = TRUE,   #  recommended for SC analysis, use t-distribution as null dist in Wald stat.
+             minReplicatesForReplace = Inf # do not replace outliers
+             )
   
   return(dds)
 }
@@ -161,23 +175,10 @@ generate_matrices <- function(path_feat,
     fmat <- read.csv(path_feat[num], sep = "\t",
                      header = TRUE, row.names = 1, stringsAsFactors = TRUE)
     
+    
     # extract only relevant columns
     fmat <- fmat[,union(c("id","replicate"),keep_cols)]
     
-    uni.patient <- unique(fmat['id'])
-    if (length(uni.patient) > 1) {
-      flog.warn("More than one section in feature file. Not supported. Exiting.")
-      exit()
-    }
-    
-    if (!any(grepl(uni.patient,patient_names))) {
-        num_patient <- num_patient + 1
-        patient_names <- c(patient_names,uni.patient)
-    }
-    
-    pseudo.id <- paste(c("P",num_patient),collapse ="")
-    fmat['pseudo.id'] <- pseudo.id
-        
     # if only tumor-annotated spots are to be analyzed
     if (filter_tumors) {
       fmat <- fmat[fmat['tumor'] == 'tumor',] #remove non-tumor spots
@@ -205,43 +206,53 @@ generate_matrices <- function(path_feat,
     
     # find spots present in count and feature file. Set to same order
     inter <- intersect(rownames(fmat),rownames(cmat))
-    #uni.rep <- unique(feature_matrix['replicate'])
-    #feature_matrix['pseudo.replicate'] = mapvalues(feature_matrix['replicate'], uni.rep, sapply(1:length(uni.rep),
-    #                                                            function(x) paste(c(pseudo.id,num),collapse =".")))
     
     cmat <-cmat[inter,]
     fmat <- fmat[inter,]
     
+    #add new gene names
     gene_names <- union(gene_names, unlist(colnames(cmat))) # union to avoid duplicate
+    #add total number of spots
     num_spots <- num_spots + length(inter)
     
+    #add count matrix to list
     clist <- append(clist, list(cmat))
     feature_matrix <- rbind(feature_matrix,as.data.frame(fmat))
     
     
   } 
   
-  feature_matrix['pseudo.replicate'] <- paste(feature_matrix$pseudo.id,feature_matrix$replicate,sep=".")
+  # give unique replicate names
+  feature_matrix['replicate'] <- paste(feature_matrix$id,feature_matrix$replicate,sep=".")
   
   # Assemble full count matrix --------
+  # create blank empty matrix of dimension n_spots x n_genes
   count_matrix <- data.frame(matrix(0, num_spots, length(gene_names)))
+  # set proper column names
   colnames(count_matrix) <- gene_names
   
+  # fill matrix from stored count matrices
   row.start <- 1
   for (i in 1:length(path_cnt)) {
     add.n.rows <- dim(clist[[1]])[1] - 1 #  subtraction to not overcount
     count_matrix[row.start:(row.start+ add.n.rows),colnames(clist[[1]])] <- clist[[1]] # fill interval in count matrix
-    clist[1] <- NULL #  dequeue matrix
+    clist[1] <- NULL #  dequeue matrix, to free up memory
     row.start <- row.start + add.n.rows #  move to blank row in count_matrix  
   }
   
-  count_matrix[is.na(count_matrix)] <- 0
+  # remove potential NA and 
+  if(any(is.na(count_matrix))) {
+    flog.warning("Count Matrix contains NA elements. These are set to zero")
+    count_matrix[is.na(count_matrix)] <- 0
+  }
+  # get indices for "cleaned" matrix
   indices <- get_clean_indices(count_matrix,
                              min_per_spot = min_per_spot,
                              min_per_gene = min_per_gene,  
                              remove_ambigious = remove_ambigious)
   
   count_matrix <- count_matrix[indices$row_idx,indices$col_idx]
+  
   # sync feature and count matrix
   feature_matrix <- feature_matrix[indices$row_idx,]
   rownames(feature_matrix) <- rownames(count_matrix)
@@ -306,8 +317,6 @@ if (args$design < 1 & length(args$custom_design) < 1) {
       
   } else if (length(args$custom_design) >= 1) {
     # if a custom designed is provided 
-    args$custom_design <- gsub("replicate","pseudo.replicate", args$custom_design)
-    args$custom_design <- gsub("id","pseudo.id", args$custom_design)
     design_formula <- as.formula(args$custom_design)
     contrast <- args$contrast
   } else {
@@ -323,7 +332,7 @@ if (!is.null(contrast)) {
 }
 # Main Body ---------------------------------
 
-keep_cols <- as.vector(sapply(all.vars(design_formula), function(x) gsub("pseudo.","",x)))
+keep_cols <- all.vars(design_formula)
 
 # generate concatenated (full) feature matrix and count matrix
 matrices <- generate_matrices(path_feat = args$feature_file, 

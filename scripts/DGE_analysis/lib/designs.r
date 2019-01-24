@@ -7,11 +7,11 @@ pre_design_formulas <- function(dfid) {
     formulas <- list()
     contrasts <- list()
   
-    formulas <- append(formulas,list('~pseudo.id:pseudo.replicate+pseudo.replicate + num.id '))
+    formulas <- append(formulas,list('~id:replicate+replicate + num.id '))
     contrasts <- append(contrasts,list(c('num.id',"P1","P2")))
-    formulas <- append(formulas,list('~pseudo.replicate:tumor + tumor'))
+    formulas <- append(formulas,list('~replicate:tumor + tumor'))
     contrasts <- append(contrasts,list(c("tumor","tumor","non")))
-    formulas <- append(formulas,list('~pseudo.id:pseudo_replicate + tumor + tumor:pseudo.replicate + tumor:pseudo.id + pseudo.id'))
+    formulas <- append(formulas,list('~id:pseudo_replicate + tumor + tumor:replicate + tumor:id + id'))
     contrasts <- append(contrasts,list(c("num.id","P1","P2")))
     
     
