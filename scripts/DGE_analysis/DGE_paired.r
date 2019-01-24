@@ -9,6 +9,10 @@ sh(library(stringr))
 sh(library(optparse))
 sh(library(plyr))
 sh(library(futile.logger))
+sh(library(BiocParallel))
+
+# TODO: add uption to use Multicoreparam
+register(MulticoreParam(8))
 
 # get script path for library load
 args <- commandArgs(trailingOnly = F)  
@@ -74,7 +78,7 @@ subsample_w_preserved_ratio <- function(labels, n_samples) {
   # sample indices to keep from respective label
   idx_keep <- c()
   for (var in var.names) {
-    idx_keep <- c(which(labels == var), sample(tidx,n_elements[[var]])) #  use which to keep original index reference
+    idx_keep <- c(idx_keep, sample(which(labels == var),n_elements[[var]])) #  use which to keep original index reference
   }
   
   return(idx_keep)
@@ -136,9 +140,11 @@ DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
   dds<-DESeq(dds, 
              sfType = 'poscounts', # to handle zero counts 
              minmu = 1e-6, #  recommended for SC analysis
-             test = 'LRT', #  recommended for SC analysis, Likelihood Ratio Test
+             #TODO: look into if LRT is better option
+             #test = 'LRT', #  recommended for SC analysis, Likelihood Ratio Test
              useT = TRUE,   #  recommended for SC analysis, use t-distribution as null dist in Wald stat.
-             minReplicatesForReplace = Inf # do not replace outliers
+             minReplicatesForReplace = Inf, # do not replace outliers
+             parallel = TRUE
              )
   
   return(dds)
@@ -356,7 +362,8 @@ dds <- DESeq_pipline(t(matrices$count_matrix), matrices$feature_matrix,design_fo
 
 if (!is.null(contrast)) {
   results_dds <- results(dds, contrast = contrast, minmu = 10e-6)
-  try(results_dds <-  lfcShrink(dds,res = results_dds,contrast = contrast))  
+  # TODO: evaluate if lfcShrinkage is necessary
+  #try(results_dds <-  lfcShrink(dds,res = results_dds,contrast = contrast))  
 } else {
   reults_dds <- results(dds)
 }
@@ -386,13 +393,17 @@ if (args$fancy) {
   sh(library(AnnotationDbi))
   # select for genes with padj equal or less to specifed value
   topnres <- res[res$padj <= args$pval & !(is.na(res$padj)),]
-  # include gene symbols in output
-  topnres$symbol <-mapIds(org.Hs.eg.db, keys=rownames(topnres),
+  
+  # only do fancy if stat. signigicant genes have been detected 
+  if (dim(topnres)[1] > 1) {
+    # include gene symbols in output
+    topnres$symbol <-mapIds(org.Hs.eg.db, keys=rownames(topnres),
                             column="SYMBOL", keytype="ENSEMBL", multiVals="first")
   
-  try(write.csv(topnres, file = paste(c(args$output_dir,paste(c(session_tag,'fancy.tsv'),collapse='.')),
-                                      collapse = "/")))
-
+    try(write.csv(topnres, file = paste(c(args$output_dir,paste(c(session_tag,'fancy.tsv'),collapse='.')),
+                                                                                          collapse = "/")))
+  }
+  
 }
 
 if (args$volcano) {
