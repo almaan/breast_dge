@@ -54,10 +54,10 @@ make_zones <- function(crd,
   
   } else {
   
-    # get indices of foci spots
+    # get bool indices of foci spots
     idx_foci <- labels == foci_label
     # prepare vector
-    zones <- matrix(0,length(labels))
+    zones <- matrix(0,nrow = length(labels))
     # compute distance matrix between spots
     dm <- as.matrix(dist(crd), method = dist_method , diag = TRUE) #  diag true for proper size
     
@@ -85,7 +85,6 @@ make_zones <- function(crd,
       if(verbose){print('ERROR: Specified method is not valid')}
       zones <- NA
     }
-    
     return(zones)
   }
 }

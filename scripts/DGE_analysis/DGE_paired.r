@@ -10,6 +10,7 @@ sh(library(optparse))
 sh(library(plyr))
 sh(library(futile.logger))
 sh(library(BiocParallel))
+sh((library(edgeR)))
 
 # TODO: add uption to use Multicoreparam
 register(MulticoreParam(8))
@@ -118,6 +119,20 @@ get_clean_indices <- function(mat, remove_ambigious,
   return(list(row_idx = keep_spots, col_idx = keep_genes))
 }
 
+edgeR_pipeline <- function(count_matrix, feature_matrix, design_formula) {
+  # Should accept count_matrix on format n_genes x n_samples
+  dgList <- DGEList(counts= count_matrix, genes = rownames(count_matrix))
+  dgList <- calcNormFactors(dgList, method = "TMM")
+  designMat <- model.matrix(design_formula, feature_matrix)
+  dge <- estimateDisp(dge, designMat)
+
+  fit <- glmFit(dge, designMat)
+  lastCoef <- length(strsplit(as.character(design_formula)[2],'\\+'))
+  lrt <- glmLRT(dge, fit, coef = lastCoef)
+  
+  return(lrt)
+  
+  }
 
 DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
   #' Perform DESeq2 DGE analysis with prepared matrices
@@ -357,8 +372,6 @@ flog.info("Initiate DESeq2")
 
 # initate DESeq2 with generated matrices and provided design formula
 dds <- DESeq_pipline(t(matrices$count_matrix), matrices$feature_matrix,design_formula)
-
-
 
 if (!is.null(contrast)) {
   results_dds <- results(dds, contrast = contrast, minmu = 10e-6)
