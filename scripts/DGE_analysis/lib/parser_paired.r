@@ -35,6 +35,25 @@ make_parser <- function(parser,tag) {
                                       "if none specified cwd will be used."),
                                     collapse = " "))
   
+parser <- add_option(parser,
+                     c("-m", "--method"),
+                     default = 'deseq2',
+                     type = "character",
+                     help = paste(c("Choose from available",
+                                    "DGE-methods. Currently supported",
+                                    'are "edgeR" and "deseq2" '),
+                                    collapse = " ")
+                      )
+
+#  parser <- add_option(parser,
+#                       c("-s", "--stamp"),
+#                       default = '',
+#                       type = "character",
+#                       help = paste(c("stamp to add to output",
+#                                      "can be any identifier. Appended to",
+#                                      "standard-output-filename."),
+#                                    collapse = " "))
+  
   parser <- add_option(parser,
                        c("-ft","--filter_tumors"),
                        default = FALSE,
@@ -72,6 +91,17 @@ make_parser <- function(parser,tag) {
                        help =paste(c("choose from available design formulas",
                                      "use flag without argument to see legens",
                                      "of defined formulas. Custom design formula"),
+                                   collapse = " ")
+  )
+  
+    parser <- add_option(parser,
+                       c("-z","--zero_coef"),
+                       default = NA,
+                       type = "integer",
+                       help =paste(c("index of terms to set to",
+                                     "zero in reduced formula, used",
+                                     "in the LRT test. 1 based",
+                                     "indexing is used."),
                                    collapse = " ")
   )
   
@@ -113,11 +143,11 @@ make_parser <- function(parser,tag) {
   )
   
   parser <- add_option(parser,
-                       c("-pr", "--paranoid"),
+                       c("-r", "--rsave"),
                        action = "store_true",
                        default = FALSE,
-                       help = paste(c("use paranoid mode. R objects of",
-                                      "DESeq2 analysis will be saved in",
+                       help = paste(c("Save R objects of",
+                                      "DGE analysis results. Will be saved in",
                                       "output directory"), collapse = " ")
   )
     
@@ -142,6 +172,7 @@ make_parser <- function(parser,tag) {
   
   parser <- add_option(parser,
                        c('-mps','--min_per_spot'),
+                       type = "integer",
                        default = 20,
                        help = paste(c("Threshold for number",
                                       "of transcripts required",

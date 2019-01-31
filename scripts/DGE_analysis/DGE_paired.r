@@ -95,13 +95,13 @@ get_clean_indices <- function(mat, remove_ambigious,
   #' param : mat - count_matrix
   #' param : remove_ambigious - remove all ambigiously mapped genes
   #' param : min_per_spot : threshold for total spot transcript count
-  #' param : min_per_gene : threshold for avearage gene transcript count
+  #' param : min_per_gene : threshold number of non-zero occurances
   #' 
   #' returns: list with items row_idx and col_idx   
   
   oldrownames <- rownames(mat)
   keep_spots <- rowSums(mat) >= min_per_spot 
-  keep_genes <- colMeans(mat) >= min_per_gene
+  keep_genes <- colSums((mat > 0)) >= min_per_gene
   
   if (remove_ambigious){
     
@@ -119,22 +119,34 @@ get_clean_indices <- function(mat, remove_ambigious,
   return(list(row_idx = keep_spots, col_idx = keep_genes))
 }
 
-edgeR_pipeline <- function(count_matrix, feature_matrix, design_formula) {
+edgeR_pipeline <- function(count_matrix,
+                           feature_matrix,
+                           design_formula
+                           ) {
   # Should accept count_matrix on format n_genes x n_samples
   dgList <- DGEList(counts= count_matrix, genes = rownames(count_matrix))
   dgList <- calcNormFactors(dgList, method = "TMM")
-  designMat <- model.matrix(design_formula, feature_matrix)
-  dge <- estimateDisp(dge, designMat)
-
-  fit <- glmFit(dge, designMat)
-  lastCoef <- length(strsplit(as.character(design_formula)[2],'\\+'))
-  lrt <- glmLRT(dge, fit, coef = lastCoef)
+  designMat <- model.matrix(design_formula, data = feature_matrix)
+  flog.info("Column Names Design Matrix: ")
+  flog.info(colnames(designMat))
+  dgList <- estimateDisp(dgList, designMat)
+  coef <- dim(designMat)[2]
   
-  return(lrt)
+  fit <- glmFit(dgList, designMat)
+  lrt <- glmLRT(fit, coef = coef)
+  
+  flog.info(paste(c("Used comparision :",as.character(lrt$comparison)),collapse=" "))
+
+    
+  return(list(fit = fit, res = lrt$table))
   
   }
 
-DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
+DESeq_pipline <- function(count_matrix,
+                          feature_matrix,
+                          design_formula,
+                          contrast,
+                          coef) {
   #' Perform DESeq2 DGE analysis with prepared matrices
   
   # construct SE object for compatibility
@@ -146,23 +158,40 @@ DESeq_pipline <- function(count_matrix, feature_matrix, design_formula) {
   dds <- DESeqDataSet(se, design = design_formula)
   flog.debug("Successfully prepared DESeq Dataset")
   
-  # relevel tumor factors as to contrast tumor to non-tumor
-  if (any('tumor' == colnames(feature_matrix))) {
-    try(dds$tumor <- relevel(dds$tumor, "non"))
-    flog.info('releveled tumor as to contrast against "non"')
+  
+  decomp_formula <- unlist(strsplit(as.character(design_formula)[2],'\\+'))
+  
+  if (length(decomp_formula) > 1) {
+    reduced_formula <- as.formula(paste(c("~",paste(decomp_formula[-coef],collapse="+")),collapse = ''))
+  } else {
+    reduced_formula <- as.formula("~1")
   }
+  
   # perform DESeq-analysis
   dds<-DESeq(dds, 
              sfType = 'poscounts', # to handle zero counts 
              minmu = 1e-6, #  recommended for SC analysis
              #TODO: look into if LRT is better option
-             #test = 'LRT', #  recommended for SC analysis, Likelihood Ratio Test
+             test = 'LRT', #  recommended for SC analysis, Likelihood Ratio Test
+             reduced = reduced_formula,
              useT = TRUE,   #  recommended for SC analysis, use t-distribution as null dist in Wald stat.
              minReplicatesForReplace = Inf, # do not replace outliers
              parallel = TRUE
              )
   
-  return(dds)
+  
+  
+  if (!is.null(contrast)) {
+    results_dds <- results(dds, contrast = contrast, minmu = 10e-6)
+    # TODO: evaluate if lfcShrinkage is necessary
+    #try(results_dds <-  lfcShrink(dds,res = results_dds,contrast = contrast))  
+  } else {
+    reults_dds <- results(dds)
+  }
+  
+  flog.info("Head of results object :")
+  flog.info(head(results_dds))  
+  return(list(fit = dds, res = results_dds))
 }
 
 
@@ -178,7 +207,6 @@ generate_matrices <- function(path_feat,
   
   #' Returns a list of a concatenated feature matrix and count matrix
   #' Data from single replicates and patients are joined into larger data frame
-  
   
   clist <- list()
   feature_matrix <- data.frame(stringsAsFactors = TRUE)
@@ -198,7 +226,7 @@ generate_matrices <- function(path_feat,
     
     
     # extract only relevant columns
-    fmat <- fmat[,union(c("id","replicate"),keep_cols)]
+    fmat <- fmat[,union(c("patient","replicate"),keep_cols)]
     
     # if only tumor-annotated spots are to be analyzed
     if (filter_tumors) {
@@ -276,6 +304,15 @@ generate_matrices <- function(path_feat,
   
   # sync feature and count matrix
   feature_matrix <- feature_matrix[indices$row_idx,]
+  # put turn all columns into factors
+  feature_matrix[] <- lapply(feature_matrix,factor)
+  
+  # relevel tumor factors as to contrast tumor to non-tumor
+  if (any('tumor' == colnames(feature_matrix))) {
+    try(feature_matrix$tumor <- relevel(feature_matrix$tumor, "non"))
+    flog.info('releveled tumor as to contrast against "non"')
+  }
+  
   rownames(feature_matrix) <- rownames(count_matrix)
 
   return(list(count_matrix = count_matrix, feature_matrix = feature_matrix))
@@ -321,7 +358,7 @@ if (ifelse(length(args$count_file) == 1,
 flog.info(paste(c("count matrix files(s) used : ",count_pth ),collapse = "\n"))
 flog.info(paste(c("feature matrix files(s) used : ",feature_pth ),collapse = "\n"))
 flog.info(paste(c("Removing genes with lower than", args$min_per_gene,"average transcripts"),collapse=" "))
-flog.info(paste(c("Removing spots with less than", args$min_per_spot,"total transcripts")),collapse=" ")
+flog.info(paste(c("Removing spots with less than", args$min_per_spot,"total transcripts"),collapse=" "))
 
 if (args$subsample_number > 0) {
   flog.info(sprintf("Will subsample data taking %d spots from each section w.r.t to feature %s",
@@ -346,6 +383,11 @@ if (args$design < 1 & length(args$custom_design) < 1) {
     contrast <- pre_expression$contrast
   }
 
+if(is.na(args$zero_coef)) {
+  coef <- as.numeric(length(strsplit(as.character(design_formula)[2],'\\+')))
+} else {
+  coef <- as.numeric(args$zero_coef)
+}
 
 flog.info(paste(c("design formula :", design_formula),collapse =" "))
 if (!is.null(contrast)) {
@@ -367,45 +409,58 @@ matrices <- generate_matrices(path_feat = args$feature_file,
                               filter_tumors = args$filter_tumors 
                               )
 
+
 flog.info("Successfully generated joint feature and count matrices")
-flog.info("Initiate DESeq2")
+flog.info(sprintf("Will be using %d spots and %d genes in analysis",
+                  dim(matrices$count_matrix)[1],dim(matrices$count_matrix)[2]))
+flog.info("Initiate Differential Gene Expression analysis")
 
 # initate DESeq2 with generated matrices and provided design formula
-dds <- DESeq_pipline(t(matrices$count_matrix), matrices$feature_matrix,design_formula)
-
-if (!is.null(contrast)) {
-  results_dds <- results(dds, contrast = contrast, minmu = 10e-6)
-  # TODO: evaluate if lfcShrinkage is necessary
-  #try(results_dds <-  lfcShrink(dds,res = results_dds,contrast = contrast))  
+if (args$method == 'deseq2') {
+  flog.info("Using method DESeq2")
+  deseqobj <- DESeq_pipline(t(matrices$count_matrix), 
+                               matrices$feature_matrix,
+                               design_formula,
+                               contrast,
+                               coef)
+  results_dge <- deseqobj$res
+  fit_dge <- deseqobj$fit
+  pval_col <- "padj"
+  lfc <- "log2FoldChange"
+  
+} else if (args$method == 'edgeR') {
+  flog.info("Using method edgeR")
+  edgeRobj   <- edgeR_pipeline(t(matrices$count_matrix),
+                                 matrices$feature_matrix,
+                                 design_formula
+                                 )
+  results_dge <- edgeRobj$res
+  fit_dge <- edgeRobj$fit
+  pval_col <- "PValue"
+  lfc <- "logFC"
 } else {
-  reults_dds <- results(dds)
+  flog.error("Method not supported. Exiting")
+  exit()
 }
 
 
-remove(matrices) #  release memory
-flog.info(paste(c("Successfully Completed DESeq2 analysis. Saving Output to files")))
+flog.info(paste(c("Successfully Completed DGE analysis. Now Saving results to files")))
 
 # Save Results ---------------------------------
 
-res <- data.frame(results_dds)
+res <- data.frame(results_dge)
 
-try(write.csv(res, file = paste(c(args$output_dir,paste(c(session_tag,'tsv'),collapse='.')),
-                                                              collapse = "/")))
-
-
-if (args$paranoid) {
-  try(save(results_dds, file = paste(c(args$output_dir,paste(c('res',session_tag,'r'),
-                                                      collapse='.')),collapse = "/")))
-  try(save(dds, file = paste(c(args$output_dir,paste(c('dds',session_tag,'r'),
-                                              collapse='.')), collapse = "/")))
+if (args$rsave) {
+  try(save(fit_dge, file = paste(c(args$output_dir,paste(c('r.res',session_tag,'r'),
+                                                     collapse='.')),collapse = "/")))
 }
-
+  
 # if fancy output is to be produced as well
 if (args$fancy) {
   sh(library(org.Hs.eg.db)) 
   sh(library(AnnotationDbi))
   # select for genes with padj equal or less to specifed value
-  topnres <- res[res$padj <= args$pval & !(is.na(res$padj)),]
+  topnres <- res[res[pval_col] <= args$pval & !(is.na(res[pval_col])),]
   
   # only do fancy if stat. signigicant genes have been detected 
   if (dim(topnres)[1] > 1) {
@@ -420,7 +475,8 @@ if (args$fancy) {
 }
 
 if (args$volcano) {
-  volcano.plot <- volcano_plot(res[!is.na(res$padj),])
+  filtered_idx <- which(!is.na(res[pval_col]))
+  volcano.plot <- volcano_plot(res[filtered_idx,lfc],res[filtered_idx,pval_col])
   try(ggsave(filename = paste(c(args$output_dir,paste(c(session_tag,'volcano.png'),collapse='.')),collapse = "/"), volcano.plot))
   flog.info("Saved volcano plot based on results")
 }
