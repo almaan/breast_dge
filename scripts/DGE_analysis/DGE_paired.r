@@ -122,7 +122,8 @@ get_clean_indices <- function(mat, remove_ambigious,
 
 edgeR_pipeline <- function(count_matrix,
                            feature_matrix,
-                           design_formula
+                           design_formula,
+                           contrasts
                            ) {
   # Should accept count_matrix on format n_genes x n_samples
   dgList <- DGEList(counts= count_matrix, genes = rownames(count_matrix))
@@ -131,10 +132,15 @@ edgeR_pipeline <- function(count_matrix,
   flog.info("Column Names Design Matrix: ")
   flog.info(colnames(designMat))
   dgList <- estimateDisp(dgList, designMat)
-  coef <- dim(designMat)[2]
+  
   
   fit <- glmFit(dgList, designMat)
-  lrt <- glmLRT(fit, coef = coef)
+  if (is.null(contrasts)) {
+    coef <- dim(designMat)[2]
+    lrt <- glmLRT(fit, coef = coef)
+  } else {
+    lrt <- glmLRT(fit, contrast = contrasts)
+  }
   flog.info(paste(c("Used comparision :",as.character(lrt$comparison)),collapse=" "))
 
   lrt <- topTags(lrt, n = dim(lrt$table)[1],p.value = 0.01)
@@ -459,7 +465,8 @@ if (args$method == 'deseq2') {
   flog.info("Using method edgeR")
   edgeRobj   <- edgeR_pipeline(t(matrices$count_matrix),
                                  matrices$feature_matrix,
-                                 design_formula
+                                 design_formula,
+                                 contrasts = args$contrast
                                  )
   results_dge <- edgeRobj$res
   fit_dge <- edgeRobj$fit
