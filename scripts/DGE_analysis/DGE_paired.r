@@ -25,6 +25,7 @@ source(paste(c(scriptPath,"lib/designs.r"), collapse ="/"))
 source(paste(c(scriptPath,"lib/parser_paired.r"), collapse ="/"))
 source(paste(c(scriptPath,"lib/modOptparse.r"),collapse ="/"))
 source(paste(c(scriptPath,"lib/volcano.r"),collapse ="/"))
+source(paste(c(scriptPath,"lib/zone_generation.r"),collapse ="/"))
 
 # Function Space ---------------------------------
 
@@ -101,7 +102,7 @@ get_clean_indices <- function(mat, remove_ambigious,
   
   oldrownames <- rownames(mat)
   keep_spots <- rowSums(mat) >= min_per_spot 
-  keep_genes <- colSums((mat > 0)) >= min_per_gene
+  keep_genes <- colSums(mat > 0)/dim(mat)[1] >= min_per_gene
   
   if (remove_ambigious){
     
@@ -125,8 +126,8 @@ edgeR_pipeline <- function(count_matrix,
                            ) {
   # Should accept count_matrix on format n_genes x n_samples
   dgList <- DGEList(counts= count_matrix, genes = rownames(count_matrix))
-  dgList <- calcNormFactors(dgList, method = "TMM")
-  designMat <- model.matrix(design_formula, data = feature_matrix)
+  dgList <- calcNormFactors(dgList, method = "TMMwzp")
+  designMat <- model.matrix(design_formula, data = feature_matrix, robust = TRUE)
   flog.info("Column Names Design Matrix: ")
   flog.info(colnames(designMat))
   dgList <- estimateDisp(dgList, designMat)
@@ -134,11 +135,11 @@ edgeR_pipeline <- function(count_matrix,
   
   fit <- glmFit(dgList, designMat)
   lrt <- glmLRT(fit, coef = coef)
-  
   flog.info(paste(c("Used comparision :",as.character(lrt$comparison)),collapse=" "))
 
+  lrt <- topTags(lrt, n = dim(lrt$table)[1],p.value = 0.01)
     
-  return(list(fit = fit, res = lrt$table))
+  return(list(fit = fit, res = lrt))
   
   }
 
@@ -202,6 +203,7 @@ generate_matrices <- function(path_feat,
                               ss_number,
                               ss_feature,
                               keep_cols,
+                              zone_distance,
                               filter_tumors = FALSE,
                               remove_ambigious = FALSE) {
   
@@ -225,16 +227,24 @@ generate_matrices <- function(path_feat,
                      header = TRUE, row.names = 1, stringsAsFactors = TRUE)
     
     
-    # extract only relevant columns
-    fmat <- fmat[,union(c("patient","replicate"),keep_cols)]
-    
     # if only tumor-annotated spots are to be analyzed
     if (filter_tumors) {
       fmat <- fmat[fmat['tumor'] == 'tumor',] #remove non-tumor spots
     }
     
-    if (ss_number > 0) {
+    if (ss_number > 0 & ss_number <= dim(fmat)[1]) {
       fmat <- fmat[subsample_w_preserved_ratio(labels = fmat[[ss_feature]], n_samples = ss_number),]
+    }
+    
+    if (!(is.na(zone_distance))) {
+      zones <- make_zones(crd = cbind(fmat$xcoord,fmat$ycoord),
+                          labels = fmat[["tumor"]],
+                          zone_method = "three_levels",
+                          ulim = zone_distance,
+                          foci_label = "tumor")
+      
+      fmat$zones <- zones 
+      print(unique(fmat$zone))
     }
     
     flog.info(paste(c("Reading count file :", path_cnt[num]),collapse = ' '))
@@ -272,7 +282,7 @@ generate_matrices <- function(path_feat,
   } 
   
   # give unique replicate names
-  feature_matrix['replicate'] <- paste(feature_matrix$id,feature_matrix$replicate,sep=".")
+  feature_matrix['replicate'] <- paste(feature_matrix$patient,feature_matrix$replicate,sep=".")
   
   # Assemble full count matrix --------
   # create blank empty matrix of dimension n_spots x n_genes
@@ -306,6 +316,22 @@ generate_matrices <- function(path_feat,
   feature_matrix <- feature_matrix[indices$row_idx,]
   # put turn all columns into factors
   feature_matrix[] <- lapply(feature_matrix,factor)
+  
+  if (!is.na(zone_distance)) {
+    zones <- as.numeric(levels(feature_matrix$zones))[feature_matrix$zones]
+    uni_zones <- unique(zones)
+    print(uni_zones)
+    new_levels <- c(uni_zones[-which(uni_zones == 1)], 1)
+    feature_matrix$zones <- factor(zones, levels = new_levels)
+    
+    if (any(feature_matrix$zones == 2)) {
+      feature_matrix$zones <- relevel(feature_matrix$zones,ref = "2")
+      flog.info("Using Peripheral region as base-level")
+    } else {
+      feature_matrix$zones <- relevel(feature_matrix$zones,ref = "0")
+      flog.info("Using Tumor region as base-level")
+    }
+  }
   
   # relevel tumor factors as to contrast tumor to non-tumor
   if (any('tumor' == colnames(feature_matrix))) {
@@ -357,7 +383,7 @@ if (ifelse(length(args$count_file) == 1,
 # information for logging
 flog.info(paste(c("count matrix files(s) used : ",count_pth ),collapse = "\n"))
 flog.info(paste(c("feature matrix files(s) used : ",feature_pth ),collapse = "\n"))
-flog.info(paste(c("Removing genes with lower than", args$min_per_gene,"average transcripts"),collapse=" "))
+flog.info(paste(c("Removing genes with lower than", args$min_per_gene,"average occurance"),collapse=" "))
 flog.info(paste(c("Removing spots with less than", args$min_per_spot,"total transcripts"),collapse=" "))
 
 if (args$subsample_number > 0) {
@@ -405,7 +431,8 @@ matrices <- generate_matrices(path_feat = args$feature_file,
                               keep_cols = keep_cols,
                               ss_number = args$subsample_number,
                               ss_feature = args$subsample_feature,
-                              remove_ambigious = args$remove_ambigious, 
+                              zone_distance = args$zone_distance,
+                              remove_ambigious = args$remove_ambigious,
                               filter_tumors = args$filter_tumors 
                               )
 
@@ -436,7 +463,7 @@ if (args$method == 'deseq2') {
                                  )
   results_dge <- edgeRobj$res
   fit_dge <- edgeRobj$fit
-  pval_col <- "PValue"
+  pval_col <- "FDR"
   lfc <- "logFC"
 } else {
   flog.error("Method not supported. Exiting")
@@ -453,8 +480,9 @@ res <- data.frame(results_dge)
 if (args$rsave) {
   try(save(fit_dge, file = paste(c(args$output_dir,paste(c('r.res',session_tag,'r'),
                                                      collapse='.')),collapse = "/")))
+  flog.info("Saved R object")
 }
-  
+
 # if fancy output is to be produced as well
 if (args$fancy) {
   sh(library(org.Hs.eg.db)) 
@@ -467,10 +495,11 @@ if (args$fancy) {
     # include gene symbols in output
     topnres$symbol <-mapIds(org.Hs.eg.db, keys=rownames(topnres),
                             column="SYMBOL", keytype="ENSEMBL", multiVals="first")
-  
+    
     try(write.csv(topnres, file = paste(c(args$output_dir,paste(c(session_tag,'fancy.tsv'),collapse='.')),
                                                                                           collapse = "/")))
-  }
+    flog.info("Save Fancy results")  
+    }
   
 }
 

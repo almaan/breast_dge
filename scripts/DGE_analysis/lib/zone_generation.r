@@ -45,6 +45,8 @@ make_zones <- function(crd,
   # print method
   if (verbose) {print(paste(c("using method >>",zone_method), collapse = " "))}
   
+  labels <- unlist(labels)
+  
   # make sure limits are provided
   if (zone_method == "three_levels" & is.null(ulim)) {
       if (verbose){print(paste(c("upper and lower limit needs to be specified when using",
@@ -56,6 +58,8 @@ make_zones <- function(crd,
   
     # get bool indices of foci spots
     idx_foci <- labels == foci_label
+    
+    
     # prepare vector
     zones <- matrix(0,nrow = length(labels))
     # compute distance matrix between spots
@@ -65,7 +69,10 @@ make_zones <- function(crd,
     if (zone_method == "three_levels") {
       zones[!(idx_foci)] <- 2
       idx_inter <- (!(idx_foci) & (rowSums(dm[,idx_foci] <= ulim) >=1) & (rowSums(dm[,idx_foci] > llim) >=1))
-      zones[idx_inter] <- 1
+      # only assign if intermediary zones
+      if (any(idx_inter)) {
+        zones[idx_inter] <- 1
+      }
       
     } else if (zone_method == "mult_levels"){
       

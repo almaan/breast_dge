@@ -203,6 +203,17 @@ parser <- add_option(parser,
                        ),collapse = " ") 
   )
   
+  parser <- add_option(parser,
+                       c('-zd','--zone_distance'),
+                       default = NA,
+                       type = "double",
+                       help = paste(c("distance to nearest",
+                                      "tumor spot in zone",
+                                      "generation,"
+                       ),collapse = " ") 
+  )
+  
+  
   return(parser)
 
 }
