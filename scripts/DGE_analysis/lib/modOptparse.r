@@ -24,7 +24,6 @@ allowMultipleArgs <- function(){
   
   if (length(oriArgs) > tail(flags.pos,n=1)) {
     pos <- c((flags.pos[length(flags.pos)]+1):length(oriArgs))
-    print(pos)
     newArgs <- c(newArgs, oriArgs[tail(flags.pos,n=1)],paste(oriArgs[pos],collapse=','))
   } else {
     newArgs <- c(newArgs, oriArgs[tail(flags.pos,n=1)])
