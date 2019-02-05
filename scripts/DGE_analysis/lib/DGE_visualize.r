@@ -84,8 +84,6 @@ args$method <- tolower(args$method)
 args$feature_file <- sort(args$feature_file)
 args$count_file <- sort(args$count_file)
 
-print(args$feature_file)
-print(args$count_file)
 
 if (args$method == "deseq") {
   pval_col <- "padj"
@@ -95,7 +93,9 @@ if (args$method == "deseq") {
   logfc <- "logFC"
 }
 
+
 dgm_ori <- read.csv(args$dge_result, sep = ",",header = TRUE, row.names = 1)
+print(head(dgm_ori))
 dgm_ori <- dgm_ori[order(dgm_ori[pval_col],decreasing = FALSE),]
 
 plot_dge_list <- list()
@@ -116,10 +116,15 @@ for (section in c(1:n_sections)) {
   cmat <- cmat[inter,]
   dgm <- dgm_ori[intersect(rownames(dgm_ori),colnames(cmat)),]
   
+  print(length(intersect(rownames(dgm_ori),colnames(cmat))))
+  
   xlab <- "xcoord"
   ylab <- "ycoord"
   feature <- "tumor"
   
+  fm[xlab] <- round(fm[xlab])
+  fm[ylab] <- round(fm[ylab])
+    
   fm$tumor <- relevel(fm$tumor, "tumor")
   cmap <- c("red","green")
   names(cmap) <- levels(fm$tumor)
@@ -127,20 +132,35 @@ for (section in c(1:n_sections)) {
   N <- args$topgenes
   
   pos_idx <- which(dgm[logfc] > 0 )
-  pos_idx <- pos_idx[1:min(length(pos_idx),N)]
-  
   neg_idx <- which(dgm[logfc] < 0 )
-  neg_idx <- neg_idx[1:min(length(neg_idx),N)]
   
-  genes_pos <- rownames(dgm)[pos_idx]
-  genes_neg <- rownames(dgm)[neg_idx]
+  print(length(pos_idx))
+  print(length(neg_idx))
   
-  rel.freq.pos <- rowSums(cmat[,genes_pos])
-  rel.freq.pos <- rel.freq.pos/max(rel.freq.pos)
-  rel.freq.neg <- rowSums(cmat[,genes_neg])
-  rel.freq.neg <- rel.freq.neg/max(rel.freq.neg)
-
-
+  if (length(pos_idx) > 0) {
+    pos_idx <- pos_idx[1:min(length(pos_idx),N)]
+    genes_pos <- rownames(dgm)[pos_idx]
+    rel.freq.pos <- rowSums(cmat[,genes_pos])
+    rel.freq.pos <- rel.freq.pos/sum(rel.freq.pos)
+    rel.freq.pos <- rel.freq.pos / max(rel.freq.pos)
+  } else {
+    rel.freq.pos <- rep(0,dim(fm)[1])    
+  }
+  
+  if (length(neg_idx) > 0) {
+    neg_idx <- neg_idx[1:min(length(neg_idx),N)]  
+    genes_neg <- rownames(dgm)[neg_idx]
+    rel.freq.neg <- rowSums(cmat[,genes_neg])
+    rel.freq.neg <- rel.freq.neg/sum(rel.freq.neg)
+    rel.freq.neg <- rel.freq.neg / max(rel.freq.neg)
+  } else {
+    rel.freq.neg <- rep(0,dim(fm)[1])
+  }
+  
+  print(colnames(fm))
+  print(fm[[xlab]][1:10])
+  print(n_sections)
+    
   plot_list[[section]] <- ggplot(data = fm, aes_string(x = xlab,y = ylab)) + 
             geom_tile(aes_string(x = xlab, y = ylab), 
               fill=rgb(r=rel.freq.pos,b=0.0,g=rel.freq.neg, alpha = 0.8), interpolate = T, color = "black") + 

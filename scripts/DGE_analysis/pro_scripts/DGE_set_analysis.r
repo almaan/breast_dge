@@ -51,29 +51,36 @@ inter_sub <- c()
 n_sub <- 1
 n_bus <- 1
 mat <- matrix(0,nrow = length(subtypes), ncol = length(subtypes))
+nmat <- matrix(0,nrow = length(subtypes), ncol = length(subtypes))
 
 for (sub in subtypes) {
   inter_tumor[[sub]] <- length(intersect(unlist(subtype_gene_sets[sub]),unlist(rownames(tumor_within_all))))
   n_bus <- 1
   for (bus in subtypes) {
     mat[n_sub,n_bus] <- length(intersect(unlist(subtype_gene_sets[sub]),unlist(subtype_gene_sets[bus])))
-    inter_sub <- c(inter_sub,ifelse(n_sub == n_bus, 0,mat[n_sub,n_bus]))
+    nmat[n_sub,n_bus] <- mat[n_sub,n_bus] / min(length(subtype_gene_sets[sub][[1]]),
+                                                length(subtype_gene_sets[bus][[1]])) 
+    inter_sub <- c(inter_sub,ifelse(n_sub == n_bus, 0,nmat[n_sub,n_bus]))
     n_bus <- n_bus +1 
   }  
   n_sub <- n_sub + 1
 }
 
 df <- data.frame(x = paste(sapply(subtypes, function(x) rep(x,length(subtypes)))), y = rep(subtypes, length(subtypes)),
-                            vals = log(inter_sub))
+                            vals = inter_sub)
 
 mat <- as.data.frame(mat)
 colnames(mat) <- subtypes
 rownames(mat) <- subtypes
+colnames(nmat) <- subtypes
+rownames(nmat) <- subtypes
 
 p1 <- ggplot(df, aes(x =x, y = y)) + 
       geom_tile(aes(fill = vals),color = "white")  + scale_fill_gradient(low = "white",
                                                      high = "steelblue")
-p2 <- ggplot(data.frame(inter = inter_tumor, subtype = subtypes , total = sapply(subtype_gene_sets,function(x) length(x))), aes(x = subtypes, y = inter_tumor)) +
-      geom_bar(stat ="identity",)
+p2 <- ggplot(data.frame(inter = inter_tumor, 
+                        subtype = subtypes , total = sapply(subtype_gene_sets,function(x) length(x))), 
+             aes(x = subtypes, y = inter_tumor)) +
+      geom_bar(stat ="identity")
 
 grid.arrange(p1,p2, ncol = 2)

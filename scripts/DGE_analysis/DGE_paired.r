@@ -250,7 +250,6 @@ generate_matrices <- function(path_feat,
                           foci_label = "tumor")
       
       fmat$zones <- zones 
-      print(unique(fmat$zone))
     }
     
     flog.info(paste(c("Reading count file :", path_cnt[num]),collapse = ' '))
@@ -326,22 +325,21 @@ generate_matrices <- function(path_feat,
   if (!is.na(zone_distance)) {
     zones <- as.numeric(levels(feature_matrix$zones))[feature_matrix$zones]
     uni_zones <- unique(zones)
-    print(uni_zones)
     new_levels <- c(uni_zones[-which(uni_zones == 1)], 1)
     feature_matrix$zones <- factor(zones, levels = new_levels)
     
-    if (any(feature_matrix$zones == 2)) {
-      feature_matrix$zones <- relevel(feature_matrix$zones,ref = "2")
-      flog.info("Using Peripheral region as base-level")
-    } else {
+    if (any(feature_matrix$zones == 0)) {
       feature_matrix$zones <- relevel(feature_matrix$zones,ref = "0")
       flog.info("Using Tumor region as base-level")
+    } else {
+      feature_matrix$zones <- relevel(feature_matrix$zones,ref = "2")
+      flog.info("Using Peripheral region as base-level")
     }
   }
   
   # relevel tumor factors as to contrast tumor to non-tumor
   if (any('tumor' == colnames(feature_matrix))) {
-    try(feature_matrix$tumor <- relevel(feature_matrix$tumor, "non"))
+    try(feature_matrix$tumor <- relevel(feature_matrix$tumor, ref = "non"))
     flog.info('releveled tumor as to contrast against "non"')
   }
   
@@ -500,8 +498,7 @@ if (args$fancy) {
   # only do fancy if stat. signigicant genes have been detected 
   if (dim(topnres)[1] > 1) {
     # include gene symbols in output
-    topnres$symbol <-mapIds(org.Hs.eg.db, keys=rownames(topnres),
-                            column="SYMBOL", keytype="ENSEMBL", multiVals="first")
+    topnres$symbol <-mapIds(org.Hs.eg.db, keys=rownames(topnres),column="SYMBOL", keytype="ENSEMBL", multiVals="first")
     
     try(write.csv(topnres, file = paste(c(args$output_dir,paste(c(session_tag,'fancy.tsv'),collapse='.')),
                                                                                           collapse = "/")))

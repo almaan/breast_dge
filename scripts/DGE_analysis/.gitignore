@@ -3,6 +3,6 @@ dump/
 *.html
 *.bak
 pre_scripts/
-pro_scripts/
+#pro_scripts/
 graveyard/
 .info
