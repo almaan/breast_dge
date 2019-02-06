@@ -2,19 +2,19 @@
 
 ## Main idea
 Think of the procedure as split into two separate parts
-1. Tumor Extraction - Find separate tumors (90% done) 
+1. Tumor Extraction - Find separate tumors (99% done) 
 2. Tumor Pairing, within samples (0% done)
 
 ## Things that Remain to be done for Tumor Extraction
 
 1. Flip y-axis in graphical output, is erronously oriented. [X]
 2. Make sure that multiple arguments can be passed (nargs and "\*" usage) [X]
-3. Change name of graph function
+3. Change name of graph function [X]
 4. Returns error when having no input file, must fix this. Left "TODO" in code for marking [X]
 5. Coloring is weird when no tumor spots are present [X]
-6. Make sure that original tumor annotation is left in output for those regions that are "masked" out, incase of invasive spread out we still want to be able to use these for analysis
+6. Make sure that original tumor annotation is left in output for those regions that are "masked" out, incase of invasive spread out we still want to be able to use these for analysis [X]
 7. Include replicate and patient in input files. [X]
-8. Do not make dependent on patient name, remove regexp and replace with simple input handling
+8. Do not make dependent on patient name, remove regexp and replace with simple input handling [X]
 
 ## Things to be done for Tumor Pairing
 

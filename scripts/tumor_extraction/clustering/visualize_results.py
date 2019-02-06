@@ -68,4 +68,4 @@ for jj in range(0,int(grid_size[1]+1)):
             break
 
 
-background.save(osp.join(pth,'clustering_result.png'))
+background.save(osp.join(pth,'total_clustering_result.png'))

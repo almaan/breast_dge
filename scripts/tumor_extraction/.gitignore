@@ -14,3 +14,4 @@ output_results*/
 .sh
 #ignore dump
 dump/
+pro_scripts/
