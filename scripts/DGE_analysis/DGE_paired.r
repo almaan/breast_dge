@@ -242,11 +242,22 @@ generate_matrices <- function(path_feat,
       fmat <- fmat[subsample_w_preserved_ratio(labels = fmat[[ss_feature]], n_samples = ss_number),]
     }
     
+    
     if (!(is.na(zone_distance))) {
+      
+      if (length(zone_distance) > 1) {
+        llim <- zone_distance[1]
+        ulim <- zone_distance[2]
+      } else {
+        llim <- 0
+        ulim <- zone_distance
+      }
+      
       zones <- make_zones(crd = cbind(fmat$xcoord,fmat$ycoord),
                           labels = fmat[["tumor"]],
                           zone_method = "three_levels",
-                          ulim = zone_distance,
+                          llim = llim,
+                          ulim = ulim,
                           foci_label = "tumor")
       
       fmat$zones <- zones 
