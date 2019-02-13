@@ -68,10 +68,16 @@ make_zones <- function(crd,
     # output based on method
     if (zone_method == "three_levels") {
       zones[!(idx_foci)] <- 2
-      idx_inter <- (!(idx_foci) & (rowSums(dm[,idx_foci] <= ulim) >=1) & (rowSums(dm[,idx_foci] > llim) >=1))
+      idx_inter <- (!(idx_foci) & (rowSums(dm[,idx_foci] <= ulim) >=1) & !(rowSums(dm[,idx_foci] < llim) >=1))
+      idx_below_inter <- (!(idx_foci) & (rowSums(dm[,idx_foci] < llim) >=1))
       # only assign if intermediary zones
       if (any(idx_inter)) {
         zones[idx_inter] <- 1
+      }
+      
+      if (any(idx_below_inter)){
+        # assign dummy index to region between intermediary and tumor zone
+        zones[idx_below_inter] <- 1.5
       }
       
     } else if (zone_method == "mult_levels"){
