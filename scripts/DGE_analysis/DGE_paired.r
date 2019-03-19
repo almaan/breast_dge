@@ -267,7 +267,7 @@ generate_matrices <- function(path_feat,
     
     # if certain spots are to be conditioned on
     if (all(!is.na(condition_on))) {
-      fmat <- fmat[condition_on[1] == condition_on[2],]
+      fmat <- fmat[fmat[condition_on[1]] == condition_on[2],]
     }
     
     
