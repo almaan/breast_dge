@@ -456,6 +456,7 @@ matrices <- generate_matrices(path_feat = args$feature_file,
                               ss_feature = args$subsample_feature,
                               zone_distance = args$zone_distance,
                               remove_ambigious = args$remove_ambigious,
+                              condition_on = args$condition_on,
                               filter_tumors = args$filter_tumors 
                               )
 
@@ -492,8 +493,7 @@ if (args$method == 'deseq2') {
   edgeRobj   <- edgeR_pipeline(t(matrices$count_matrix),
                                  matrices$feature_matrix,
                                  design_formula,
-                                 contrasts = args$contrast,
-                                 condition_on = args$condition_on
+                                 contrasts = args$contrast
                                  )
   results_dge <- edgeRobj$res
   fit_dge <- edgeRobj$fit
