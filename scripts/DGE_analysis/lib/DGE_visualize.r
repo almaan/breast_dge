@@ -70,6 +70,20 @@ parser <- add_option(parser,c("-o","--output"),
                                   collapse =" ")
 )
 
+parser <- add_option(parser,c("-p","--posonly"),
+                     type = "logical",
+                     default = FALSE,
+                     action = "store_true",
+                     help = paste(c("only plot positive log2fold",
+                                    "change."),
+                                  collapse =" ")
+)
+
+parser <- add_option(parser, c("-g","--gene"),
+                     type ="character",
+                     default = NA)
+
+
 
 args <- splitMultipleArgs(parse_args(parser,
                                      args = allowMultipleArgs()))
@@ -95,11 +109,15 @@ if (args$method == "deseq") {
 
 
 dgm_ori <- read.csv(args$dge_result, sep = ",",header = TRUE, row.names = 1)
-print(head(dgm_ori))
 dgm_ori <- dgm_ori[order(dgm_ori[pval_col],decreasing = FALSE),]
 
 plot_dge_list <- list()
 plot_list <- list()
+
+if (!is.na(args$gene)){
+  args$posonly <- TRUE
+}
+
 #par(mfrow = c(n_sections,2))
 
 for (section in c(1:n_sections)) {
@@ -116,7 +134,6 @@ for (section in c(1:n_sections)) {
   cmat <- cmat[inter,]
   dgm <- dgm_ori[intersect(rownames(dgm_ori),colnames(cmat)),]
   
-  print(length(intersect(rownames(dgm_ori),colnames(cmat))))
   
   xlab <- "xcoord"
   ylab <- "ycoord"
@@ -131,39 +148,47 @@ for (section in c(1:n_sections)) {
   
   N <- args$topgenes
   
-  pos_idx <- which(dgm[logfc] > 0 )
-  neg_idx <- which(dgm[logfc] < 0 )
-  
-  print(length(pos_idx))
-  print(length(neg_idx))
-  
-  if (length(pos_idx) > 0) {
-    pos_idx <- pos_idx[1:min(length(pos_idx),N)]
-    genes_pos <- rownames(dgm)[pos_idx]
-    rel.freq.pos <- rowSums(cmat[,genes_pos])
+  if (!is.na(args$gene)) {
+    pos_idx <-rownames(dgm)[which(toupper(dgm$symbol) == toupper(args$gene))]
+    genes_pos <- pos_idx
+    rel.freq.pos <- cmat[,pos_idx]
     rel.freq.pos <- rel.freq.pos/sum(rel.freq.pos)
     rel.freq.pos <- rel.freq.pos / max(rel.freq.pos)
   } else {
-    rel.freq.pos <- rep(0,dim(fm)[1])    
+    pos_idx <- which(dgm[logfc] > 0 )
+  
+    if (length(pos_idx) > 0) {
+      pos_idx <- pos_idx[1:min(length(pos_idx),N)]
+      genes_pos <- rownames(dgm)[pos_idx]
+      rel.freq.pos <- rowSums(cmat[,genes_pos])
+      rel.freq.pos <- rel.freq.pos/sum(rel.freq.pos)
+      rel.freq.pos <- rel.freq.pos / max(rel.freq.pos)
+    } else {
+      rel.freq.pos <- rep(0,dim(fm)[1])
+      
+    }
   }
   
-  if (length(neg_idx) > 0) {
-    neg_idx <- neg_idx[1:min(length(neg_idx),N)]  
-    genes_neg <- rownames(dgm)[neg_idx]
-    rel.freq.neg <- rowSums(cmat[,genes_neg])
-    rel.freq.neg <- rel.freq.neg/sum(rel.freq.neg)
-    rel.freq.neg <- rel.freq.neg / max(rel.freq.neg)
+  if (args$posonly) {
+    rel.freq.neg <- rep(0,length(rel.freq.pos))
+    genes_neg <- "NA"
   } else {
-    rel.freq.neg <- rep(0,dim(fm)[1])
+    neg_idx <- which(dgm[logfc] < 0 )
+    
+    if (length(neg_idx) > 0) {
+      neg_idx <- neg_idx[1:min(length(neg_idx),N)]  
+      genes_neg <- rownames(dgm)[neg_idx]
+      rel.freq.neg <- rowSums(cmat[,genes_neg])
+      rel.freq.neg <- rel.freq.neg/sum(rel.freq.neg)
+      rel.freq.neg <- rel.freq.neg / max(rel.freq.neg)
+    } else {
+      rel.freq.neg <- rep(0,dim(fm)[1])
+    }
   }
   
-  print(colnames(fm))
-  print(fm[[xlab]][1:10])
-  print(n_sections)
-    
   plot_list[[section]] <- ggplot(data = fm, aes_string(x = xlab,y = ylab)) + 
             geom_tile(aes_string(x = xlab, y = ylab), 
-              fill=rgb(r=rel.freq.pos,b=0.0,g=rel.freq.neg, alpha = 0.8), interpolate = T, color = "black") + 
+              fill=rgb(r=rel.freq.pos,b=0.0,g=rel.freq.neg, alpha = 0.8), color = "black") + 
             ggtitle(paste(c(
                     basename(args$count_file[section]),
                     "\n",

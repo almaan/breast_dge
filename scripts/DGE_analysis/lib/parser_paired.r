@@ -214,6 +214,19 @@ parser <- add_option(parser,
                        ),collapse = " ") 
   )
   
+  parser <- add_option(parser,
+                       c('-cnd','--conditioned_on'),
+                       default = c('',''),
+                       type = "double",
+                       help = paste(c("conditon analysis on",
+                                      "certain spots. Needs to",
+                                      "Two arguments required",
+                                      "[1] name of column containing covariates",
+                                      "[2] covariate to condition on"
+                       ),collapse = " ") 
+  )
+  
+  
   
   return(parser)
 

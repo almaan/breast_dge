@@ -210,6 +210,7 @@ generate_matrices <- function(path_feat,
                               ss_feature,
                               keep_cols,
                               zone_distance,
+                              condition_on,
                               filter_tumors = FALSE,
                               remove_ambigious = FALSE) {
   
@@ -262,6 +263,13 @@ generate_matrices <- function(path_feat,
       
       fmat$zones <- zones 
     }
+    
+    
+    # if certain spots are to be conditioned on
+    if (all(!(condition_on == ''))) {
+      fmat <- fmat[condition_on[1] == condition_on[2],]
+    }
+    
     
     flog.info(paste(c("Reading count file :", path_cnt[num]),collapse = ' '))
     # load count-matrix
@@ -457,6 +465,15 @@ flog.info(sprintf("Will be using %d spots and %d genes in analysis",
                   dim(matrices$count_matrix)[1],dim(matrices$count_matrix)[2]))
 flog.info("Initiate Differential Gene Expression analysis")
 
+if (grepl('zones',colnames(matrices$feature_matrix))) {
+  flog.info('Zone Stats are')
+  print(table(matrices$feature_matrix$zones))
+
+} else if (grepl('tumor',colnames(matrices$feature_matrix))){
+  flog.info('Tumor Stats are')
+  print(table(matrices$feature_matrix$tumor)) 
+} 
+
 # initate DESeq2 with generated matrices and provided design formula
 if (args$method == 'deseq2') {
   flog.info("Using method DESeq2")
@@ -475,7 +492,8 @@ if (args$method == 'deseq2') {
   edgeRobj   <- edgeR_pipeline(t(matrices$count_matrix),
                                  matrices$feature_matrix,
                                  design_formula,
-                                 contrasts = args$contrast
+                                 contrasts = args$contrast,
+                                 condition_on = args$condition_on
                                  )
   results_dge <- edgeRobj$res
   fit_dge <- edgeRobj$fit
