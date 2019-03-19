@@ -215,7 +215,7 @@ parser <- add_option(parser,
   )
   
   parser <- add_option(parser,
-                       c('-cnd','--conditioned_on'),
+                       c('-cnd','--condition_on'),
                        default = NA,
                        type = "double",
                        help = paste(c("conditon analysis on",
