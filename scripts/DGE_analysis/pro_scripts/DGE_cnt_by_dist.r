@@ -1,4 +1,4 @@
-g#!/usr/bin/Rscript
+#!/usr/bin/Rscript
 
 library(spatstat)
 library(viridis)
@@ -244,7 +244,7 @@ dataf <- data / length(st_cnt_files)
 # remove genes and distances where no observetions are made
 dataf <- dataf[rowSums(dataf) > 0,colSums(dataf) > 0]
 # remove distances where no spots are present
-meanpntf <- meanpnt[rowSums(dataf) > 0]
+meanpntf <- meanpnt[rowSums(data) > 0]
 # name of analysis
 bname <- gsub("\\.fancy\\.tsv","",basename(genes_pth))
 print(paste(c(dirname(genes_pth),paste(c(bname,"count_by_distance.png"),collapse = '.')),collapse = '/'))
@@ -260,6 +260,8 @@ cmap <- viridis(dim(data)[2])
 
 # get plot title
 if (is.null(main_title)) {
+  plt_title <- gsub('DGE_analysis\\.','',bname)
+} else {
   plt_title <- main_title
 }
 
@@ -271,7 +273,7 @@ plot(meanpntf,dataf[,1],
      xlab = 'distance to nearest tumor spot',
      ylab = 'mean expression',
      col = cmap[1],
-     main = gsub('DGE_analysis\\.','',bname),
+     main = plt_title,
      cex.main = 0.9,
      pch = 19
      )
