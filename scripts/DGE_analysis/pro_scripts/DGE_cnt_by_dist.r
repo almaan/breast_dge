@@ -1,4 +1,4 @@
-#!/usr/bin/Rscript
+g#!/usr/bin/Rscript
 
 library(spatstat)
 library(viridis)
@@ -211,7 +211,6 @@ for (filenum in c(1:length(st_cnt_files))){
   cnt[,inter] <- cnt_raw[,inter]
   remove(cnt_raw) # to free up space
   
-  #cnt <- cnt / rowMeans(cnt) 
   cnt <- cnt[,inter]
   
   # get tumor and non-tumor spot coordinates
@@ -280,7 +279,6 @@ plot(meanpntf,dataf[,1],
 # add points for all genes
 for (ii in 2:(ncol(dataf))) {
   points(x= meanpntf, dataf[,ii], col = cmap[ii], pch = 19)
-  #apply(dataf[,-1], 2, points, x = meanpntf)
 }
 
 # add fitted curves for each gene using same color as points
