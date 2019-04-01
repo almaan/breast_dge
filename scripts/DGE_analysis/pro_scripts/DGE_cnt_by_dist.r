@@ -257,7 +257,7 @@ if (negative_lfc) {
   # add down-regulated genes to set to be analyzed
   keepgenes <- c(keepgenes,rownames(genes)[nidx])
   # create colormap for down-regulated genes. Blue spectrum
-  bch <- 255 - ((c(1:sum(pidx))*5) %% 255)
+  bch <- 255 - ((c(1:sum(nidx))*5) %% 255)
   nrgb <- cbind(rep(0,length(bch)),rep(0,length(bch)),bch) / 255
   cmap <- c(cmap,rgb(nrgb))
 }
@@ -354,7 +354,7 @@ dataf <- dataf[rowSums(data) > 0,colSums(data) > 0]
 meanpntf <- meanpnt[rowSums(data) > 0]
 # perform z-transform
 if (z_transform) {
-  dataf <- apply(datag,2,scale)
+  dataf <- apply(dataf,2,scale)
 }
 
 # name of analysis
