@@ -1,11 +1,27 @@
 #!/usr/bin/Rscript
 
 library(spatstat)
-library(viridis)
 library(optparse)
 library(org.Hs.eg.db)
 library(AnnotationDbi)
 
+# Functions -----------------------------
+
+calcSSE <- function(x, tmpdata){
+  # Based on http://r-statistics.co/Loess-Regression-With-R.html
+  loessMod <- try(loess( y ~ x, data = tmpdata , span = x), silent = T)
+  res <- try(loessMod$residuals, silent = T )
+  if(class(res)!="try-error"){
+    if((sum(res,na.rm=T) > 0)) {
+      sse <- sum(res^2)
+    } else {
+      sse <- 99999
+    }
+  } else {
+    sse <- 99999
+  }
+  return(sse)
+}
 
 # Wrapper for multiple argument parsing -----------------
 
@@ -93,6 +109,50 @@ parser <- add_option(parser,
                      help = ""
 )
 
+parser <- add_option(parser,
+                     c("-r","--reference_tag"),
+                     default = 'tumor',
+                     help = ""
+)
+
+parser <- add_option(parser,
+                     c("-x","--target_tag"),
+                     default = 'non',
+                     help = ""
+)
+
+parser <- add_option(parser,
+                     c("-m","--method"),
+                     default = 'polynomial',
+                     help = ""
+)
+
+parser <- add_option(parser,
+                     c("-u","--positive_lfc"),
+                     default = F,
+                     action = 'store_true',
+                     help = ""
+)
+
+parser <- add_option(parser,
+                     c("-n","--negative_lfc"),
+                     default = F,
+                     action = 'store_true',
+                     help = ""
+)
+
+parser <- add_option(parser,
+                     c("-s","--loess_span"),
+                     default = 0.5,
+                     help = ""
+)
+
+parser <- add_option(parser,
+                     c("-z","--z_transform"),
+                     default = F,
+                     action = 'store_true',
+                     help = ""
+)
 
 # Variables -----------------
 
@@ -111,8 +171,14 @@ if (interactive()) {
   genes_pth <- '/home/alma/ST-2018/CNNp/DGE/res/DGEresults2/section_and_zone_within_subtype_new_d2/her2nonlum/DGE_analysis.2019-03-19-15-11-50.64798.tme_vs_tumor.fancy.tsv'
   
   polydeg <- 5
-  
+  loess_span <- 0.5
+  target_tag <- 'tumor'
+  reference_tag <- 'non'
+  positive_lfc <- T
+  negative_lfc <- T
+  method = 'loess'
   main_title <- "test"
+  z_transform <- F
 
 } else {
   # For CLI usage
@@ -122,6 +188,13 @@ if (interactive()) {
   genes_pth <- args$dge_res
   polydeg <- args$polydeg
   main_title <- args$title
+  target_tag <- args$target_tag
+  reference_tag <- args$reference_tag
+  method <- args$method
+  loess_span <- args$loess_span
+  positive_lfc <- args$positive_lfc
+  negative_lfc <- args$negative_lfc
+  z_transform <- args$z_transform
 }
 
 # Validate input -----------------------
@@ -161,9 +234,45 @@ genes <- read.table(genes_pth, sep = ',',
                     row.names = 1,
                     stringsAsFactors = F)
 
+keepgenes <- c()
+cmap <- c()
+# if genes with positive lFC should be analyzed
+if (positive_lfc) {
+  # get index of up-regulated genes
+  pidx <- genes$logFC > 0
+  # add up-regulated to genes to set to be analyzed
+  keepgenes <- c(keepgenes,rownames(genes)[pidx])
+  # create colormap for up-regulated genes. Red spectrum
+  print(sprintf('>> Using %d Genes With Positive lFC',sum(pidx)))
+  rch <- 255 - ((c(1:sum(pidx))*5) %% 255)
+  prgb <- cbind(rch, rep(0,length(rch)),rep(0,length(rch))) / 255
+  cmap <- c(cmap,rgb(prgb))
+}
+
+# if genes with negative lFC should be analyzed
+if (negative_lfc) {
+  # get index of down-regulated genes
+  nidx <- genes$logFC < 0
+  print(sprintf('>> Using %d genes with negative lFC',sum(nidx)))
+  # add down-regulated genes to set to be analyzed
+  keepgenes <- c(keepgenes,rownames(genes)[nidx])
+  # create colormap for down-regulated genes. Blue spectrum
+  bch <- 255 - ((c(1:sum(pidx))*5) %% 255)
+  nrgb <- cbind(rep(0,length(bch)),rep(0,length(bch)),bch) / 255
+  cmap <- c(cmap,rgb(nrgb))
+}
+
+if (!(negative_lfc) & !(positive_lfc)) {
+  print('>> Specify at least one set of genes to plot (lFC >0 or lFC <0')
+  print('>> Exiting')
+  quit(status = 1)
+}
+
+genes <- genes[keepgenes,]
 genes <- genes$genes # get ENSEMBL ids
 genes <- genes[!(is.na(genes))] # remove any potential NA
-
+print('>> using genes ')
+print(genes)
 mx <- 50 #  maximum distance from distance from tumor spot
 dr <- 0.1 #  distance increment
 lims <- seq(0,mx+dr,dr) #  lower limits 
@@ -192,7 +301,7 @@ for (filenum in c(1:length(st_cnt_files))){
   
   feat <- read.table(feat_pth, sep = '\t', header = 1, row.names = 1, stringsAsFactors = F)
   cnt_raw <- read.table(st_cnt_pth, sep = '\t', header = 1, row.names = 1, stringsAsFactors = F)
-  cnt_raw <- cnt_raw / rowMeans(cnt_raw)
+  cnt_raw <- sweep(cnt_raw, MARGIN = 1, FUN = "/", rowMeans(cnt_raw))
   
   # extract spots present in feature and count file
   interspt <- as.character(intersect(rownames(feat),rownames(cnt_raw)))
@@ -211,16 +320,14 @@ for (filenum in c(1:length(st_cnt_files))){
   cnt[,inter] <- cnt_raw[,inter]
   remove(cnt_raw) # to free up space
   
-  cnt <- cnt[,inter]
-  
   # get tumor and non-tumor spot coordinates
-  tmrspts <- feat[feat$tumor == 'tumor',c('xcoord','ycoord')]
-  nonspot <- feat[feat$tumor == 'non',c('xcoord','ycoord')]
+  refspts <- feat[feat$tumor == reference_tag,c('xcoord','ycoord')]
+  trgtspts <- feat[feat$tumor == target_tag,c('xcoord','ycoord')]
   
   # create distance matrix (euclidian distance)
-  dmat = crossdist.default(X = nonspot[,1], Y = nonspot[,2], x2 = tmrspts[,1], y2 = tmrspts[,2])
-  rownames(dmat) = rownames(nonspot)
-  colnames(dmat) = rownames(tmrspts)
+  dmat = crossdist.default(X = trgtspts[,1], Y = trgtspts[,2], x2 = refspts[,1], y2 = refspts[,2])
+  rownames(dmat) = rownames(trgtspts)
+  colnames(dmat) = rownames(refspts)
   
   # get minimum distance to a tumor spot for each non-tumor spot
   mindist <- apply(dmat, 1, min)
@@ -233,31 +340,35 @@ for (filenum in c(1:length(st_cnt_files))){
     # if I is non-empty
     if (length(spt_within) > 0) {
       # add mean of observed counts taken over points within I
-      data[ii,] <- data[ii,] + colMeans(cnt[spt_within,]) 
+      data[ii,] <- sweep(data[ii,], FUN = '+', MARGIN = 2, colMeans(cnt[spt_within,])) 
     }
   }
 
 }
-
+print(data)
 # adjust for multiple sections having been used
 dataf <- data / length(st_cnt_files)
 # remove genes and distances where no observetions are made
-dataf <- dataf[rowSums(dataf) > 0,colSums(dataf) > 0]
+dataf <- dataf[rowSums(data) > 0,colSums(data) > 0]
 # remove distances where no spots are present
 meanpntf <- meanpnt[rowSums(data) > 0]
+# perform z-transform
+if (z_transform) {
+  dataf <- apply(datag,2,scale)
+}
+
 # name of analysis
 bname <- gsub("\\.fancy\\.tsv","",basename(genes_pth))
 print(paste(c(dirname(genes_pth),paste(c(bname,"count_by_distance.png"),collapse = '.')),collapse = '/'))
+analysis_type <- ifelse(z_transform,'z_transform','absolute.vals')
+sign <- ifelse(reference_tag == 'tumor','positive','negative')
 # save result to png-file
-png(paste(c(dirname(genes_pth),paste(c(bname,"count_by_distance.png"),collapse = '.')),collapse = '/'),
+png(paste(c(dirname(genes_pth),paste(c(bname,sign,analysis_type,"count_by_distance.png"),collapse = '.')),collapse = '/'),
     width = 1000,
     height = 500)
 
 # panel for plot and legend
 par(mfrow=c(1,2))
-# generate colormap
-cmap <- viridis(dim(data)[2])
-
 # get plot title
 if (is.null(main_title)) {
   plt_title <- gsub('DGE_analysis\\.','',bname)
@@ -269,8 +380,8 @@ if (is.null(main_title)) {
 
 # initiate plot
 plot(meanpntf,dataf[,1],
-     ylim = c(0,max(dataf + 1)),
-     xlab = 'distance to nearest tumor spot',
+     ylim = c(ifelse(z_transform,(min(dataf)-10),0), max(dataf + 1)),
+     xlab = paste(c(target_tag, 'distance to nearest', reference_tag, 'spot'), collapse = ' '),
      ylab = 'mean expression',
      col = cmap[1],
      main = plt_title,
@@ -285,19 +396,32 @@ for (ii in 2:(ncol(dataf))) {
 
 # add fitted curves for each gene using same color as points
 fitted <- list()
-for (ii in c(1:ncol(dataf))) {
-  # using polynomial of degree "polydeg" to fit data
-  fitted[[genes[ii]]] <- lm(formula = y ~ poly(x, polydeg, raw=TRUE),
-                            data = data.frame(x = meanpntf, # distance is independent variable
-                                              y = dataf[,ii]) # mean expression is dependent variable
-                            )
+if (method == 'loess'){
+
+  for (ii in c(1:ncol(dataf))) {
+
+    fitted[[genes[ii]]] <- loess(y ~ x,
+                                 data = data.frame(x = meanpntf, # distance is independent variable
+                                                   y = dataf[,ii]), # mean expression is dependent variable
+                                 span = loess_span)
+    
+    lines(meanpntf, predict(fitted[[genes[ii]]], data.frame(x=meanpntf)), col=cmap[ii], lwd = 5)
+    
+  }
   
-  lines(meanpntf, predict(fitted[[genes[ii]]], data.frame(x=meanpntf)), col=cmap[ii], lwd = 5)
+} else if (method == 'polynomial') {
+  for (ii in c(1:ncol(dataf))) {
+    # using polynomial of degree "polydeg" to fit data
+    fitted[[genes[ii]]] <- lm(formula = y ~ poly(x, polydeg, raw=TRUE),
+                              data = data.frame(x = meanpntf, # distance is independent variable
+                                                y = dataf[,ii]) # mean expression is dependent variable
+                              )
+    
+    lines(meanpntf, predict(fitted[[genes[ii]]], data.frame(x=meanpntf)), col=cmap[ii], lwd = 5)
+  }
 }
 
 # plot legend in different subplot for readability
 plot(x=NULL, xlim = c(0,2), ylim = c(0,1), xlab = '', ylab = '')
 legend(0,1,legend= c(symbol), fill = cmap, cex = 0.5, bty = 'n', ncol = 5  )
 dev.off()
-
-
