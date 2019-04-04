@@ -78,7 +78,7 @@ make_zones <- function(crd,
         zones[idx_below_inter] <- "inter"
       }
     
-    if (zone_method == "tme_vs_all") {
+    } else if (zone_method == "tme_vs_all") {
       zones[,] <- "distal_and_tumor"
       idx_inter <- (!(idx_foci) & (rowSums(dm[,idx_foci] <= ulim) >=1) & !(rowSums(dm[,idx_foci] < llim) >=1))
       idx_below_inter <- (!(idx_foci) & (rowSums(dm[,idx_foci] < llim) >=1))

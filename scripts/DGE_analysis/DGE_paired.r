@@ -351,14 +351,17 @@ generate_matrices <- function(path_feat,
   feature_matrix[] <- lapply(feature_matrix,factor)
   
   if (!is.na(zone_distance)) {
-    feature_matrix$zones <- factors(zones$levels)
-
+    print('Entering zone_creation')
+    feature_matrix$zones <- factor(feature_matrix$zones)
+    print(feature_matrix$zones)
    if (any(grepl('micro',feature_matrix$zones))) {
+      flog.info('Setting TME as last factor')
       tme_name <- levels(feature_matrix$zones)[grepl('micro',levels(feature_matrix$zones))]
       new_zones <- relevel(feature_matrix$zones , ref = tme_name)
-      new_zones <- factor(zones, levels = rev(levels(new_zones)))
+      new_zones <- factor(feature_matrix$zones, levels = rev(levels(new_zones)))
+      
       feature_matrix$zones <- new_zones
-      flog.info('Setting TME as last factor')
+      
     }
       
     if (any(grepl('tumor',feature_matrix$zones))) {
@@ -473,7 +476,7 @@ matrices <- generate_matrices(path_feat = args$feature_file,
                               ss_number = args$subsample_number,
                               ss_feature = args$subsample_feature,
                               zone_distance = args$zone_distance,
-                              zone_method = args$zone_metod,
+                              zone_method = args$zone_method,
                               remove_ambigious = args$remove_ambigious,
                               condition_on = args$condition_on,
                               filter_tumors = args$filter_tumors 
