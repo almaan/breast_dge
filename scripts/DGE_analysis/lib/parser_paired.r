@@ -215,6 +215,14 @@ parser <- add_option(parser,
   )
   
   parser <- add_option(parser,
+                       c('-q','--zone_method'),
+                       default = 'three_levels',
+                       help = paste(c("method to use when",
+                                      "generating zones"
+                       ),collapse = " ") 
+  )
+  
+  parser <- add_option(parser,
                        c('-cnd','--condition_on'),
                        default = NA,
                        help = paste(c("conditon analysis on",
