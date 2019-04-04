@@ -74,16 +74,15 @@ for (file in filenames) {
   cnames <- colnames(fit_dge)
   print(cnames)
   tme <- which(grepl('zones1',cnames))
-  tumor <-which(grepl('zones2',cnames))
+  distal <-which(grepl('zones2',cnames))
   if (args$test == 'tumor') {
     print('Contrasting TME against Tumor Tissue')
-    contrast <- rep(0,length(cnames))
-    contrast[tme] <- 1
-    contrast[tumor] <- -1
-    lrt <- glmLRT(fit_dge, contrast = contrast)
+    lrt <- glmLRT(fit_dge, coef = tme)
     oname_type <- 'tme_vs_tumor'
   } else if (args$test == 'distal') {
     print(sprintf('Contrasting TME against Distal Tissue'))
+    contrast[tme] <- 1
+    contrast[distal] <- -1
     lrt <- glmLRT(fit_dge, coef = tme)
     oname_type <- 'tme_vs_distal'
   }
