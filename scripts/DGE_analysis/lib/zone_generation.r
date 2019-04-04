@@ -58,28 +58,40 @@ make_zones <- function(crd,
   
     # get bool indices of foci spots
     idx_foci <- labels == foci_label
-    
-    
     # prepare vector
-    zones <- matrix(0,nrow = length(labels))
+    zones <- matrix("tumor",nrow = length(labels))
     # compute distance matrix between spots
     dm <- as.matrix(dist(crd), method = dist_method , diag = TRUE) #  diag true for proper size
     
     # output based on method
     if (zone_method == "three_levels") {
-      zones[!(idx_foci)] <- 2
+      zones[!(idx_foci)] <- "distal"
       idx_inter <- (!(idx_foci) & (rowSums(dm[,idx_foci] <= ulim) >=1) & !(rowSums(dm[,idx_foci] < llim) >=1))
       idx_below_inter <- (!(idx_foci) & (rowSums(dm[,idx_foci] < llim) >=1))
       # only assign if intermediary zones
       if (any(idx_inter)) {
-        zones[idx_inter] <- 1
+        zones[idx_inter] <- "micro"
       }
       
       if (any(idx_below_inter)){
         # assign dummy index to region between intermediary and tumor zone
-        zones[idx_below_inter] <- 1.5
+        zones[idx_below_inter] <- "inter"
+      }
+    
+    if (zone_method == "tme_vs_all") {
+      zones[,] <- "distal_and_tumor"
+      idx_inter <- (!(idx_foci) & (rowSums(dm[,idx_foci] <= ulim) >=1) & !(rowSums(dm[,idx_foci] < llim) >=1))
+      idx_below_inter <- (!(idx_foci) & (rowSums(dm[,idx_foci] < llim) >=1))
+      # only assign if intermediary zones
+      if (any(idx_inter)) {
+        zones[idx_inter] <- "micro"
       }
       
+      if (any(idx_below_inter)){
+        # assign dummy index to region between intermediary and tumor zone
+        zones[idx_below_inter] <- "inter"
+      }
+        
     } else if (zone_method == "mult_levels"){
       
       max.dist <- ceiling(max(dm[idx_foci,!(idx_foci)]))

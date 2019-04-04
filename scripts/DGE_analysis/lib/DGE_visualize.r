@@ -143,7 +143,7 @@ for (section in c(1:n_sections)) {
   fm[ylab] <- round(fm[ylab])
     
   fm$tumor <- relevel(fm$tumor, "tumor")
-  cmap <- c("red","green")
+  cmap <- c("green","red")
   names(cmap) <- levels(fm$tumor)
   
   N <- args$topgenes

@@ -45,6 +45,14 @@ exit <- function() {
   .Internal(.invokeRestart(list(NULL, NULL), NULL))
 }
 
+swaptolast <- function(v,x) {
+  op <- which(grepl(x,v))
+  e <- v[op]
+  v[op] <- v[length(v)]
+  v[length(v)] <- e
+  return(v) 
+  }
+
 banner <- function(){
   # completely unecessary banner.
   txt <- paste(c("",
@@ -256,7 +264,7 @@ generate_matrices <- function(path_feat,
       
       zones <- make_zones(crd = cbind(fmat$xcoord,fmat$ycoord),
                           labels = fmat[["tumor"]],
-                          zone_method = "three_levels",
+                          zone_method = zone_method,
                           llim = llim,
                           ulim = ulim,
                           foci_label = "tumor")
@@ -342,18 +350,27 @@ generate_matrices <- function(path_feat,
   feature_matrix[] <- lapply(feature_matrix,factor)
   
   if (!is.na(zone_distance)) {
-    zones <- as.numeric(levels(feature_matrix$zones))[feature_matrix$zones]
-    uni_zones <- unique(zones)
-    new_levels <- c(uni_zones[-which(uni_zones == 1)], 1)
-    feature_matrix$zones <- factor(zones, levels = new_levels)
-    
-    if (any(feature_matrix$zones == 0)) {
-      feature_matrix$zones <- relevel(feature_matrix$zones,ref = "0")
-      flog.info("Using Tumor region as base-level")
-    } else {
-      feature_matrix$zones <- relevel(feature_matrix$zones,ref = "2")
-      flog.info("Using Peripheral region as base-level")
+    feature_matrix$zones <- factors(zones$levels)
+
+   if (any(grepl('micro',feature_matrix$zones))) {
+      tme_name <- levels(feature_matrix$zones)[grepl('micro',levels(feature_matrix$zones))]
+      new_zones <- relevel(feature_matrix$zones , ref = tme_name)
+      new_zones <- factor(zones, levels = rev(levels(new_zones)))
+      feature_matrix$zones <- new_zones
+      flog.info('Setting TME as last factor')
     }
+      
+    if (any(grepl('tumor',feature_matrix$zones))) {
+        feature_matrix$zones <- relevel(feature_matrix$zones,ref = "tumor")
+        flog.info("Using Tumor region as base-level")
+    } else if (any(grepl('distal_and_tumor',feature_matrix$zones))) {
+        feature_matrix$zones <- relevel(feature_matrix$zones, ref = "distal_and_tumor")
+        flog.info("Using Joint Set of Distal and Tumor as base-level")
+      } else {
+        feature_matrix$zones <- relevel(feature_matrix$zones,ref = "distal")
+        flog.info("Using Distal region as base-level")
+    }
+      
   }
   
   # relevel tumor factors as to contrast tumor to non-tumor
@@ -466,11 +483,11 @@ flog.info(sprintf("Will be using %d spots and %d genes in analysis",
                   dim(matrices$count_matrix)[1],dim(matrices$count_matrix)[2]))
 flog.info("Initiate Differential Gene Expression analysis")
 
-if (grepl('zones',colnames(matrices$feature_matrix))) {
+if (any(grepl('zones',colnames(matrices$feature_matrix)))) {
   flog.info('Zone Stats are')
   print(table(matrices$feature_matrix$zones))
 
-} else if (grepl('tumor',colnames(matrices$feature_matrix))){
+} else if (any(grepl('tumor',colnames(matrices$feature_matrix)))){
   flog.info('Tumor Stats are')
   print(table(matrices$feature_matrix$tumor)) 
 } 
